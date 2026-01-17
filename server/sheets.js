@@ -97,10 +97,13 @@ async function getAllLeads() {
       lead[key] = row[i] || '';
     });
     
+    // Generate fallback PlaceID for manually-added leads
+    const placeId = lead.PlaceID || `manual-${lead.LeadName?.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() || index}`;
+    
     // Normalize keys for legacy app usage
     return {
       ...lead,
-      PlaceID: lead.PlaceID || '',
+      PlaceID: placeId,
       BusinessName: lead.LeadName || '',
       City: lead.BusinessCity || '', // Mapped from "Business / City"
       Phone: lead.PhoneNumber || '',

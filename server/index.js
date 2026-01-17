@@ -26,10 +26,12 @@ router.get('/leads', async (req, res) => {
 router.patch('/lead/:place_id', async (req, res) => {
   try {
     const { place_id } = req.params;
+    console.log(`[PATCH] Updating lead ${place_id}`, req.body); // DEBUG LOG
     const { remarks, highlighted, callHistory, reminderDate, reminderRemark, name, phone, city, telecaller, callStatus } = req.body;
     await updateLead(place_id, { remarks, highlighted, callHistory, reminderDate, reminderRemark, name, phone, city, telecaller, callStatus });
     res.json({ success: true });
   } catch (error) {
+    console.error(`[PATCH ERROR]`, error);
     res.status(500).json({ error: error.message });
   }
 });
