@@ -28,6 +28,7 @@ function App() {
   const [activeView, setActiveView] = useState('crm'); // 'crm' | 'discovery'
   const [filterColor, setFilterColor] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -197,9 +198,17 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white flex overflow-hidden selection:bg-white/10">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} />
+      <Sidebar activeView={activeView} setActiveView={setActiveView} isOpen={isSidebarOpen} setIsOpen={setSidebarOpen} />
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#050505]">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#050505] w-full relative">
         <Header 
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}
@@ -215,6 +224,7 @@ function App() {
           setFilterColor={setFilterColor}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
+          toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
         />
 
         <div className="flex-1 overflow-y-auto p-10 space-y-12 no-scrollbar lg:custom-scrollbar">

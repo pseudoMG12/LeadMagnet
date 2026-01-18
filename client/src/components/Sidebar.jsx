@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Grid2X2, Users, PieChart, FileText, Settings, Target, ChevronDown } from 'lucide-react';
+import { Zap, Grid2X2, Users, PieChart, FileText, Settings, Target, ChevronDown, X } from 'lucide-react';
 
 const NavItem = ({ icon: Icon, label, active = false, onClick }) => (
   <button 
@@ -10,50 +10,63 @@ const NavItem = ({ icon: Icon, label, active = false, onClick }) => (
         : 'text-white/70 hover:text-white hover:bg-white/[0.03]'
     }`}
   >
-    <Icon size={13} className={active ? 'text-black' : 'text-white/70 group-hover:text-white'} />
-    <span className={`hidden lg:block text-xs font-medium ${active ? 'text-black' : ''}`}>
+    <Icon size={18} className={active ? 'text-black' : 'text-white/70 group-hover:text-white'} />
+    <span className={`text-xs font-medium ${active ? 'text-black' : ''}`}>
       {label}
     </span>
   </button>
 );
 
-const Sidebar = ({ activeView, setActiveView }) => {
+const Sidebar = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
   return (
-    <aside className="w-16 lg:w-64 border-r border-white/5 flex flex-col p-4 bg-black z-50">
+    <aside className={`
+      fixed inset-y-0 left-0 z-50 w-64 bg-black border-r border-white/5 flex flex-col p-4 shadow-2xl transition-transform duration-300
+      lg:relative lg:translate-x-0 lg:shadow-none
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+    `}>
       {/* Brand */}
-      <div className="flex items-center gap-3 px-3 py-6 mb-6">
-        <div className="w-10 h-10 bg-white rounded-[1rem] flex items-center justify-center shrink-0">
-          <Zap size={16} className="text-black fill-black" strokeWidth={2.5} />
+      <div className="flex items-center justify-between mb-6 px-2 pt-2 lg:pt-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white rounded-[1rem] flex items-center justify-center shrink-0">
+            <Zap size={20} className="text-black fill-black" strokeWidth={2.5} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-lg font-medium tracking-tight serif leading-tight text-white/90">LeadMagnet</span>
+            <span className="text-[10px] text-white/20 uppercase tracking-[0.2em] font-medium leading-none mt-1">Intelligence v2</span>
+          </div>
         </div>
-        <div className="hidden lg:flex flex-col">
-          <span className="text-lg font-medium tracking-tight serif leading-tight text-white/90">LeadMagnet</span>
-          <span className="text-[10px] text-white/20 uppercase tracking-[0.2em] font-medium leading-none mt-1">Intelligence v2</span>
-        </div>
+        {/* Mobile Close Button */}
+        <button 
+          onClick={() => setIsOpen(false)}
+          className="lg:hidden p-2 text-white/40 hover:text-white transition-colors"
+        >
+          <X size={20} />
+        </button>
       </div>
       
       {/* Nav */}
       <div className="flex-1 space-y-6 overflow-y-auto no-scrollbar">
         <div className="space-y-4">
-          <span className="hidden lg:block text-[10px] text-white/40 uppercase tracking-[0.4em] font-medium px-4">Workspace</span>
+          <span className="text-[10px] text-white/40 uppercase tracking-[0.4em] font-medium px-4">Workspace</span>
           <nav className="space-y-2">
             <NavItem 
               icon={Target} 
               label="Primary CRM" 
               active={activeView === 'crm'} 
-              onClick={() => setActiveView('crm')} 
+              onClick={() => { setActiveView('crm'); setIsOpen(false); }} 
             />
             <NavItem 
               icon={Grid2X2} 
               label="Discovery" 
               active={activeView === 'discovery'} 
-              onClick={() => setActiveView('discovery')} 
+              onClick={() => { setActiveView('discovery'); setIsOpen(false); }} 
             />
             <NavItem icon={Users} label="Collaborators" />
           </nav>
         </div>
 
         <div className="space-y-4">
-          <span className="hidden lg:block text-[10px] text-white/40 uppercase tracking-[0.4em] font-medium px-4">Analytics</span>
+          <span className="text-[10px] text-white/40 uppercase tracking-[0.4em] font-medium px-4">Analytics</span>
           <nav className="space-y-2">
             <NavItem icon={PieChart} label="Metrics" />
             <NavItem icon={FileText} label="Export Logs" />
@@ -64,9 +77,9 @@ const Sidebar = ({ activeView, setActiveView }) => {
       {/* Footer */}
       <div className="pt-6 border-t border-white/5 space-y-4">
         <button className="flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/70 hover:text-white hover:bg-white/[0.03] transition-all w-full">
-           <Settings size={16} /> <span className="hidden lg:block text-xs font-medium">Config</span>
+           <Settings size={18} /> <span className="text-xs font-medium">Config</span>
         </button>
-        <div className="hidden lg:flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-xl border border-white/5">
+        <div className="flex items-center justify-between px-3 py-2.5 bg-white/5 rounded-xl border border-white/5">
            <div className="flex items-center gap-3">
              <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-[10px] font-medium">AS</div>
              <div className="flex flex-col">
