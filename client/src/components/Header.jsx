@@ -1,8 +1,9 @@
 import React from 'react';
-import { Target, Inbox, LayoutGrid, Table } from 'lucide-react';
+import { Target, Inbox, LayoutGrid, Table, Search } from 'lucide-react';
+import { CARD_COLORS } from '../utils/data';
 import { format, isSameDay, startOfToday } from 'date-fns';
 
-const Header = ({ selectedDate, setSelectedDate, activeTab, setActiveTab, viewMode, setViewMode, activeCount, todayCount, sortConfig, setSortConfig }) => {
+const Header = ({ selectedDate, setSelectedDate, activeTab, setActiveTab, viewMode, setViewMode, activeCount, todayCount, sortConfig, setSortConfig, filterColor, setFilterColor, searchQuery, setSearchQuery }) => {
   const isToday = isSameDay(selectedDate, startOfToday());
 
   return (
@@ -30,7 +31,41 @@ const Header = ({ selectedDate, setSelectedDate, activeTab, setActiveTab, viewMo
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      {/* Search Bar */}
+      <div className="flex-1 max-w-xl mx-4 relative group">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-white/50 transition-colors">
+            <Search size={14} />
+          </div>
+          <input 
+            type="text" 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search leads by name, phone, city, notes..." 
+            className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white/90 placeholder:text-white/20 focus:outline-none focus:bg-white/5 focus:border-white/10 transition-all font-medium"
+          />
+      </div>
+
+        <div className="flex items-center gap-4">
+        {/* Color Filter */}
+        <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 items-center gap-1">
+          <button
+             onClick={() => setFilterColor(null)}
+             className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${!filterColor ? 'bg-white/10 text-white' : 'text-white/20 hover:text-white/40'}`}
+             title="All Colors"
+          >
+            <span className="text-[10px] font-bold">ALL</span>
+          </button>
+          {CARD_COLORS.map((color) => (
+            <button
+              key={color}
+              onClick={() => setFilterColor(filterColor === color ? null : color)}
+              className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${filterColor === color ? 'bg-white/20 ring-1 ring-white/50' : 'hover:bg-white/5'}`}
+            >
+              <div className={`w-3 h-3 rounded-full ${color}`} />
+            </button>
+          ))}
+        </div>
+
         <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
           <button 
             onClick={() => setSortConfig({ key: 'BusinessName', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}

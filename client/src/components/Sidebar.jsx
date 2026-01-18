@@ -17,7 +17,7 @@ const NavItem = ({ icon: Icon, label, active = false, onClick }) => (
   </button>
 );
 
-const Sidebar = () => {
+const Sidebar = ({ activeView, setActiveView }) => {
   return (
     <aside className="w-16 lg:w-64 border-r border-white/5 flex flex-col p-4 bg-black z-50">
       {/* Brand */}
@@ -36,8 +36,18 @@ const Sidebar = () => {
         <div className="space-y-4">
           <span className="hidden lg:block text-[10px] text-white/40 uppercase tracking-[0.4em] font-medium px-4">Workspace</span>
           <nav className="space-y-2">
-            <NavItem icon={Target} label="Primary CRM" active />
-            <NavItem icon={Grid2X2} label="Segments" />
+            <NavItem 
+              icon={Target} 
+              label="Primary CRM" 
+              active={activeView === 'crm'} 
+              onClick={() => setActiveView('crm')} 
+            />
+            <NavItem 
+              icon={Grid2X2} 
+              label="Discovery" 
+              active={activeView === 'discovery'} 
+              onClick={() => setActiveView('discovery')} 
+            />
             <NavItem icon={Users} label="Collaborators" />
           </nav>
         </div>

@@ -11,7 +11,7 @@ import LeadCard from './components/LeadCard';
 import SheetView from './components/SheetView';
 
 // Utils
-import { API_BASE, DUMMY_DATA } from './utils/data';
+import { API_BASE, DUMMY_DATA, CARD_COLORS } from './utils/data';
 
 function App() {
   const [leads, setLeads] = useState([]);
@@ -21,6 +21,11 @@ function App() {
   const [sortConfig, setSortConfig] = useState({ key: 'LastUpdated', direction: 'desc' });
   const [selectedDate, setSelectedDate] = useState(startOfToday());
   const [anchorDate, setAnchorDate] = useState(startOfToday());
+  
+  // New States for Views and Filtering
+  const [activeView, setActiveView] = useState('crm'); // 'crm' | 'discovery'
+  const [filterColor, setFilterColor] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const dates = useMemo(() => {
     return Array.from({ length: 30 }).map((_, i) => addDays(anchorDate, i - 4));
@@ -107,8 +112,47 @@ function App() {
     fetchLeads();
   }, [fetchLeads]);
 
+  const isLeadEdited = (lead) => {
+    const hasRemark = lead.Remarks && lead.Remarks.trim().length > 0;
+    const hasColor = lead.Color && lead.Color.trim().length > 0;
+    const isHighlighted = lead.Highlighted === 'TRUE';
+    const hasReminder = lead.ReminderDate && lead.ReminderDate.length > 0;
+    
+    let hasHistory = false;
+    try {
+       const h = JSON.parse(lead.CallHistory || '[]');
+       if (h.length > 0) hasHistory = true;
+    } catch(e) {}
+    
+    return hasRemark || hasColor || isHighlighted || hasReminder || hasHistory;
+  };
+
   const processedLeads = useMemo(() => {
     let list = [...leads];
+    
+    // 0. Filter by Search Query
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      list = list.filter(l => 
+        (l.BusinessName && l.BusinessName.toLowerCase().includes(lowerQuery)) ||
+        (l.Phone && l.Phone.toLowerCase().includes(lowerQuery)) ||
+        (l.City && l.City.toLowerCase().includes(lowerQuery)) ||
+        (l.Website && l.Website.toLowerCase().includes(lowerQuery)) ||
+        (l.Remarks && l.Remarks.toLowerCase().includes(lowerQuery))
+      );
+    }
+
+    // 1. Filter by View Role (CRM = Edited, Discovery = Unedited)
+    if (activeView === 'crm') {
+      list = list.filter(l => isLeadEdited(l));
+    } else {
+      list = list.filter(l => !isLeadEdited(l));
+    }
+
+    // 2. Filter by Color
+    if (filterColor) {
+      list = list.filter(l => l.Color === filterColor);
+    }
     
     // Sorting logic
     list.sort((a, b) => {
@@ -126,7 +170,7 @@ function App() {
     });
 
     return list;
-  }, [leads, sortConfig]);
+  }, [leads, sortConfig, activeView, filterColor, searchQuery]);
 
   // Filter leads based on the Selected Date in Timeline (defaults to Today)
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -137,7 +181,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white flex overflow-hidden selection:bg-white/10">
-      <Sidebar />
+      <Sidebar activeView={activeView} setActiveView={setActiveView} />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#050505]">
         <Header 
@@ -151,6 +195,10 @@ function App() {
           todayCount={scheduledLeads.length}
           sortConfig={sortConfig}
           setSortConfig={setSortConfig}
+          filterColor={filterColor}
+          setFilterColor={setFilterColor}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
         />
 
         <div className="flex-1 overflow-y-auto p-10 space-y-12 no-scrollbar lg:custom-scrollbar">
@@ -161,18 +209,23 @@ function App() {
             onDateJump={handleDateJump}
           />
 
-          <section className="animate-in fade-in duration-700">
-            <ScraperForm onComplete={fetchLeads} />
-          </section>
+          {activeView === 'discovery' && (
+            <section className="animate-in fade-in duration-700">
+              <ScraperForm onComplete={fetchLeads} />
+            </section>
+          )}
 
           <section className="space-y-8 pb-20">
             <div className="flex items-center justify-between border-b border-white/5 pb-6">
                <div className="flex items-center gap-4">
                  <h3 className="text-sm font-medium text-white/40 uppercase tracking-[0.4em] serif !text-white/80">
-                   {activeTab === 'active' ? 'Operational CRM Dataset' : 'Leads Scheduled for Today'}
+                   {activeView === 'crm' 
+                      ? (activeTab === 'active' ? 'Operational CRM Dataset' : 'Leads Scheduled for Today')
+                      : 'Discovery Data Pool'
+                   }
                  </h3>
                  <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[9px] text-white/40 tracking-widest uppercase">
-                    Autonomous CRM Sync
+                    {activeView === 'crm' ? 'Autonomous CRM Sync' : 'Raw Intelligence'}
                  </span>
                </div>
             </div>
