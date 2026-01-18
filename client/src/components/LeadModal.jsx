@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Phone, Globe, Star, ExternalLink, X, MapPin } from 'lucide-react';
+import { Phone, Globe, Star, ExternalLink, X, MapPin, Instagram, Link as LinkIcon, AlertCircle, Calendar, Activity } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { safeFormat } from '../utils/date';
 
-const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor }) => {
+import { CARD_COLORS } from '../utils/data';
+
+const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor }) => {
   const [businessName, setBusinessName] = useState(lead.BusinessName);
   const [phone, setPhone] = useState(lead.Phone);
   const [city, setCity] = useState(lead.City);
+  const [instagram, setInstagram] = useState(lead.Instagram || '');
+  const [website, setWebsite] = useState(lead.Website || '');
   const [telecaller, setTelecaller] = useState(lead.Telecaller || '');
   const [callStatus, setCallStatus] = useState(lead.CallStatus || 'Not Contacted');
   const [remarks, setRemarks] = useState(lead.Remarks);
@@ -14,18 +18,43 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor }) => {
   const [reminderRemark, setReminderRemark] = useState(lead.ReminderRemark || '');
   const [newNote, setNewNote] = useState('');
   const [history, setHistory] = useState(JSON.parse(lead.CallHistory || '[]'));
+  // Use lead.Color if it exists, otherwise fall back to the index-based initialColor (or white)
+  const [selectedColor, setSelectedColor] = useState(lead.Color || initialColor || 'bg-white');
 
-  const handleSave = () => {
+  // Auto-save function for all fields except remarks
+  const autoSave = (updatedFields = {}) => {
     onUpdate({
       name: businessName,
       phone: phone,
       city: city,
+      instagram: instagram,
+      website: website,
       telecaller: telecaller,
       callStatus: callStatus,
       remarks: remarks,
       reminderDate: reminderDate,
       reminderRemark: reminderRemark,
-      callHistory: JSON.stringify(history)
+      callHistory: JSON.stringify(history),
+      color: selectedColor,
+      ...updatedFields
+    });
+  };
+
+  // Manual save for remarks only
+  const handleSave = () => {
+    onUpdate({
+      name: businessName,
+      phone: phone,
+      city: city,
+      instagram: instagram,
+      website: website,
+      telecaller: telecaller,
+      callStatus: callStatus,
+      remarks: remarks,
+      reminderDate: reminderDate,
+      reminderRemark: reminderRemark,
+      callHistory: JSON.stringify(history),
+      color: selectedColor
     });
   };
 
@@ -33,180 +62,268 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor }) => {
     if (!newNote.trim()) return;
     const newEntry = { date: new Date().toISOString(), note: newNote.trim() };
     const updatedHistory = [...history, newEntry];
+    
     setHistory(updatedHistory);
-    // Auto-update the "Notes" (reminderRemark) with the latest entry for sheet visibility
     setReminderRemark(newNote.trim());
     setNewNote('');
+
+    // Auto-save immediately
+    onUpdate({
+      name: businessName,
+      phone: phone,
+      city: city,
+      instagram: instagram,
+      website: website,
+      telecaller: telecaller,
+      callStatus: callStatus,
+      remarks: remarks,
+      reminderDate: reminderDate,
+      reminderRemark: newNote.trim(),
+      callHistory: JSON.stringify(updatedHistory),
+      color: selectedColor
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-6 animate-in fade-in duration-300" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300" onClick={onClose}>
       <div 
-        className={`${cardColor} w-full max-w-5xl rounded-2xl p-6 md:p-8 flex flex-col md:flex-row gap-6 md:gap-8 text-black relative shadow-[0_30px_100px_rgba(0,0,0,0.4)] border border-white/20 h-[90vh] overflow-hidden`}
+        className={`${selectedColor} w-full max-w-[75rem] rounded-4xl p-3 relative shadow-2xl border  h-[90vh] flex gap-3 transition-all duration-300`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close */}
+        {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-8 right-8 p-3 bg-black/5 rounded-full hover:bg-black/10 transition-all active:scale-95 z-10"
+          className="absolute top-4 right-4 p-2 bg-white text-black rounded-full  border border-black/5 hover:scale-110 transition-transform z-50"
         >
-          <X size={24} />
+          <X size={20} strokeWidth={2} />
         </button>
 
-        {/* Left: Info & Strategy */}
-        <div className="flex-1 space-y-6 overflow-y-auto pr-4 custom-scrollbar-black">
-          <div className="space-y-2">
-            <span className="text-[9px] uppercase tracking-[0.4em] text-black/60 font-bold px-1">Lead Identity</span>
-            <div className="flex items-center gap-3">
-              <input 
-                className="w-full text-3xl md:text-4xl serif tracking-tight leading-none bg-transparent border-none focus:outline-none focus:bg-black/5 rounded-lg px-1 transition-all min-w-0"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-              />
-              <a 
-                href={lead.GoogleMapsLink} 
-                target="_blank" 
-                rel="noreferrer"
-                className="p-3 bg-black/5 rounded-xl hover:bg-black/10 transition-all text-black/40 hover:text-red-500 shrink-0"
-                title="Open in Maps"
-              >
-                <MapPin size={24} />
-              </a>
-            </div>
-            <div className="flex items-center gap-3 pt-1">
-              <span className="px-3 py-1 bg-white/40 rounded-full text-[9px] font-bold uppercase tracking-widest border border-black/5 shadow-sm">{lead.Category}</span>
-              <div className="w-1 h-1 rounded-full bg-black/20" />
-              <input 
-                className="text-xs font-bold text-black/60 italic bg-transparent border-none focus:outline-none focus:bg-black/5 rounded-md px-1 transition-all"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <span className="text-[9px] uppercase tracking-widest text-black/40 font-bold ml-1">Telecaller</span>
-              <input 
-                className="w-full bg-black/5 border border-black/5 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:bg-black/10 transition-all"
-                value={telecaller}
-                onChange={(e) => setTelecaller(e.target.value)}
-                placeholder="Assign Telecaller"
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-[9px] uppercase tracking-widest text-black/40 font-bold ml-1">Call Status</span>
-              <select 
-                className="w-full bg-black/5 border border-black/5 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:bg-black/10 transition-all appearance-none"
-                value={callStatus}
-                onChange={(e) => setCallStatus(e.target.value)}
-              >
-                <option value="Not Contacted">Not Contacted</option>
-                <option value="Connected">Connected</option>
-                <option value="Busy">Busy</option>
-                <option value="Switch Off">Switch Off</option>
-                <option value="Wrong Number">Wrong Number</option>
-                <option value="Follow Up">Follow Up</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 pt-4 border-t border-black/5">
-            <div className="space-y-1.5">
-               <p className="text-[9px] uppercase tracking-widest text-black/50 font-bold ml-1">Contact Details</p>
-               <div className="flex items-center gap-3 p-3 bg-white/40 backdrop-blur-sm rounded-xl hover:bg-white/50 transition-all group border border-white/30">
-                 <Phone size={14} className="text-black/60 transition-colors" />
-                 <input 
-                    className="text-sm font-bold bg-transparent border-none focus:outline-none w-full"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Phone Number"
-                  />
+        {/* --- LEFT PANEL: INFO & INTELLIGENCE --- */}
+         <div className="flex-[2] bg-gradient-to-b from-white via-white/80 to-white/60  rounded-3xl p-6 flex flex-col gap-5 shadow-2xl overflow-y-auto custom-scrollbar-black text-black">
+           
+           {/* Header Section */}
+           <div className="space-y-3">
+               <div className="flex items-center justify-between">
+                  <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Business Entity</span>
+                  <div className="flex items-center gap-1.5 mr-10">
+                    {CARD_COLORS.map((c) => (
+                       <button 
+                         key={c}
+                         onClick={(e) => { e.stopPropagation(); setSelectedColor(c); autoSave({ color: c }); }}
+                         className={`w-3.5 h-3.5 rounded-full border border-black/10 transition-all ${c} ${selectedColor === c ? 'scale-125 ring-1 ring-black/30 shadow-sm' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                         title="Set Color"
+                       />
+                     ))}
+                  </div>
                </div>
-            </div>
-          </div>
+               <input 
+                 className="w-full text-4xl serif tracking-tight leading-none bg-transparent border-none focus:outline-none placeholder:text-black/10 -ml-1 py-1 text-black"
+                 value={businessName}
+                 onChange={(e) => { setBusinessName(e.target.value); autoSave({ name: e.target.value }); }}
+                 placeholder="Business Name"
+               />
+               
+               {/* Quick Pills */}
+               <div className="flex gap-2">
+                 <a href={lead.GoogleMapsLink} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-black/5 hover:bg-black/10 rounded-full text-black/60 transition-all text-[10px] font-bold uppercase tracking-wide">
+                    <MapPin size={10} className="opacity-50" />
+                    <span>Maps</span>
+                 </a>
+               </div>
+           </div>
 
-          <div className="space-y-4 pt-2">
-            <div className="space-y-3">
-              <label className="text-[9px] uppercase tracking-[0.4em] text-black/60 font-bold ml-1">Main Strategic Remarks (Outcomes)</label>
-              <textarea 
-                className="w-full h-24 bg-black/5 border border-black/5 rounded-2xl p-4 text-sm font-medium text-black placeholder:text-black/10 focus:outline-none focus:bg-black/10 transition-all resize-none leading-relaxed shadow-inner"
-                placeholder="Final determination for this lead..."
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-              />
-            </div>
-
-            <div className="bg-black/5 p-5 rounded-2xl space-y-4 border border-black/5">
-              <div className="flex items-center justify-between">
-                 <label className="text-[9px] uppercase tracking-[0.4em] text-black/40 font-bold ml-1">Next Engagement Schedule</label>
-                 <input 
-                   type="date" 
-                   className="bg-transparent text-[10px] font-bold uppercase tracking-widest focus:outline-none"
-                   value={reminderDate}
-                   onChange={(e) => setReminderDate(e.target.value)}
-                 />
+           {/* Cards Grid */}
+           <div className="grid grid-cols-3 gap-3">
+              {/* Card 1: Location */}
+              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
+                  <div className="flex items-center gap-2 text-black/40 mb-1">
+                      <MapPin size={12} />
+                      <span className="text-[9px] font-bold uppercase tracking-wider">Location</span>
+                  </div>
+                  <input 
+                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    placeholder="Add City..."
+                    value={city}
+                    onChange={(e) => { setCity(e.target.value); autoSave({ city: e.target.value }); }}
+                  />
               </div>
-              <p className="text-[9px] text-black/30 font-bold uppercase ml-1">Notes in Sheet: {reminderRemark || 'No recent notes'}</p>
-            </div>
-          </div>
-          
-          <div className="flex justify-center pt-2">
-            <button 
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-8 py-2 bg-black text-white rounded-lg text-[9px] font-bold uppercase tracking-[0.2em] hover:opacity-90 active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2"
-            >
-              {isSaving ? (
-                <div className="w-2.5 h-2.5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-              ) : "Save Changes"}
-            </button>
-          </div>
+
+              {/* Card 2: Contact */}
+              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
+                  <div className="flex items-center gap-2 text-black/40 mb-1">
+                      <Phone size={12} />
+                      <span className="text-[9px] font-bold uppercase tracking-wider">Contact</span>
+                  </div>
+                  <input 
+                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    placeholder="Add Phone..."
+                    value={phone}
+                    onChange={(e) => { setPhone(e.target.value); autoSave({ phone: e.target.value }); }}
+                  />
+              </div>
+
+              {/* Card 3: Instagram */}
+              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors relative">
+                  <div className="flex items-center justify-between text-black/40 mb-1">
+                      <div className="flex items-center gap-2">
+                        <Instagram size={12} />
+                        <span className="text-[9px] font-bold uppercase tracking-wider">Instagram</span>
+                      </div>
+                      <span className="text-[14px] opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+                  </div>
+                  <input 
+                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    placeholder="@username"
+                    value={instagram}
+                    onChange={(e) => { setInstagram(e.target.value); autoSave({ instagram: e.target.value }); }}
+                  />
+              </div>
+
+               {/* Card 4: Website */}
+               <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors relative">
+                  <div className="flex items-center justify-between text-black/40 mb-1">
+                      <div className="flex items-center gap-2">
+                         <Globe size={12} />
+                         <span className="text-[9px] font-bold uppercase tracking-wider">Website</span>
+                      </div>
+                      {website && <a href={website} target="_blank" rel="noreferrer" className="absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full"><ExternalLink size={12} /></a>}
+                  </div>
+                  <input 
+                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    placeholder="https://..."
+                    value={website}
+                    onChange={(e) => { setWebsite(e.target.value); autoSave({ website: e.target.value }); }}
+                  />
+              </div>
+
+              {/* Card 5: Status */}
+              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
+                  <div className="flex items-center gap-2 text-black/40 mb-1">
+                      <ExternalLink size={12} className="rotate-90" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider">Status</span>
+                  </div>
+                  <select 
+                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none cursor-pointer appearance-none"
+                     value={callStatus}
+                     onChange={(e) => { setCallStatus(e.target.value); autoSave({ callStatus: e.target.value }); }}
+                   >
+                      <option value="Not Contacted">Not Contacted</option>
+                      <option value="Connected">Connected</option>
+                      <option value="Busy">Busy</option>
+                      <option value="Switch Off">Switch Off</option>
+                      <option value="Wrong Number">Wrong/Invalid</option>
+                      <option value="Follow Up">Follow Up</option>
+                   </select>
+              </div>
+
+               {/* Card 6: Assignee */}
+               <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
+                   <div className="flex items-center gap-2 text-black/40 mb-1">
+                       <Activity size={12} />
+                       <span className="text-[9px] font-bold uppercase tracking-wider">Assignee</span>
+                   </div>
+                   <input 
+                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                     placeholder="Select Telecaller..."
+                     value={telecaller}
+                     onChange={(e) => { setTelecaller(e.target.value); autoSave({ telecaller: e.target.value }); }}
+                   />
+               </div>
+
+           </div>
+           
+           {/* Integrated Intelligence Box */}
+           <div className="mt-auto flex-1 flex flex-col min-h-[150px]">
+               <div className="flex justify-between items-center mb-2 px-1">
+                   <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Internal Intelligence</span>
+                   {reminderRemark && <span className="text-[9px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Sync: {reminderRemark}</span>}
+               </div>
+               
+               <div className="relative group flex-1">
+                  <textarea 
+                     className="w-full h-full bg-white/50 shadow-xl focus:border-black/10 focus:bg-white rounded-2xl p-5 text-sm font-medium text-black placeholder:text-black/20 focus:outline-none transition-all resize-none leading-relaxed custom-scrollbar-black pb-14  min-h-[120px]"
+                     placeholder="Enter detailed strategic remarks and intelligence..."
+                     value={remarks}
+                     onChange={(e) => setRemarks(e.target.value)}
+                  />
+                  
+                  <button 
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="absolute bottom-4 right-4 px-5 py-2 bg-black text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black/80 active:scale-95 transition-all shadow-lg flex items-center gap-2"
+                  >
+                    {isSaving ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <span>Save Sync</span>}
+                  </button>
+               </div>
+           </div>
         </div>
 
-        {/* Right: History Timeline */}
-        <div className="w-full md:w-[380px] flex flex-col gap-6 bg-black/5 rounded-3xl p-6 border border-black/5 shadow-inner">
-          <div className="flex items-center justify-between border-b border-black/10 pb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
-              <span className="text-[9px] uppercase tracking-[0.4em] text-black/40 font-medium">Detailed Engagement Log</span>
-            </div>
-            <span className="text-[9px] font-bold opacity-20 bg-black/10 px-2 py-1 rounded-md">{history.length} CARDS</span>
-          </div>
+        {/* --- RIGHT PANEL: ACTIVITY LOG --- */}
+         <div className="flex-1 bg-white/80  rounded-3xl relative shadow-2xl overflow-hidden text-black flex flex-col">
+            <div className="absolute top-0 left-0 right-0 p-5 pb-3 flex justify-between items-center z-20 backdrop-blur-sm bg-gradient-to-b from-white to-transparent">
+               <span className="text-[10px] uppercase tracking-[0.3em] text-black/40 font-bold">Activity Feed</span>
+                <span className="text-[10px] font-bold text-black/30">{history.length}</span>
+           </div>
+           
+           <div 
+             className="flex-1 overflow-y-auto space-y-5 custom-scrollbar-black p-5 pt-20 pb-64"
+             style={{ 
+               maskImage: 'linear-gradient(to bottom, transparent 0px, black 80px, black calc(100% - 250px), transparent 100%)',
+               WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 80px, black calc(100% - 250px), transparent 100%)' 
+             }}
+           >
+               {history.length > 0 ? [...history].reverse().map((h, i) => (
+                  <div key={i} className="relative pl-4 border-l-2 border-black/5">
+                    <div className="absolute top-1.5 left-[-5px] w-2.5 h-2.5 rounded-full bg-white border-2 border-black/10" />
+                    <p className="text-[9px] uppercase tracking-wider text-black/40 font-bold mb-1">{safeFormat(h.date, 'MMM dd, HH:mm')}</p>
+                    <div className="text-xs font-semibold text-black/80 leading-relaxed">
+                      {h.note}
+                    </div>
+                  </div>
+                )) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
+                     <p className="text-[9px] uppercase tracking-widest font-bold">No Activity</p>
+                  </div>
+                )}
+           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar-black">
-            {history.length > 0 ? [...history].reverse().map((h, i) => (
-              <div key={i} className="space-y-2 relative pl-6 border-l border-black/20 hover:border-black transition-colors">
-                <div className="absolute top-1 left-[-4px] w-1.5 h-1.5 rounded-full bg-black/40 shadow-sm" />
-                <p className="text-[9px] uppercase tracking-widest text-black/30 font-bold leading-none">{safeFormat(h.date, 'dd MMM yyyy HH:mm')}</p>
-                <p className="text-xs font-medium leading-relaxed text-black/80 bg-white/40 p-4 rounded-2xl shadow-sm border border-white/20 whitespace-pre-wrap">{h.note}</p>
-              </div>
-            )) : (
-              <div className="h-40 flex flex-col items-center justify-center text-center opacity-20 italic space-y-3">
-                 <div className="w-10 h-10 border border-black/10 rounded-full flex items-center justify-center text-lg">?</div>
-                 <p className="text-[10px] uppercase tracking-widest">Awaiting field intelligence.</p>
-              </div>
-            )}
-          </div>
+            <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col gap-3 backdrop-blur-xs bg-gradient-to-t from-white/50 to-transparent">
+             <div className="mb-2 flex items-center justify-between transition-colors">
+                <div className="flex items-center gap-2">
+                   <Calendar size={12} className="text-black transition-colors" />
+                   <span className="text-[10px] font-bold uppercase tracking-wider text-black transition-colors">Set Next Reminder</span>
+                </div>
+                <input 
+                  type="date" 
+                  className="bg-black text-white rounded-lg px-4 py-2 text-[10px] font-bold uppercase focus:outline-none cursor-pointer shadow-lg border-none hover:scale-105 transition-transform"
+                  style={{ colorScheme: 'dark' }}
+                  value={reminderDate}
+                  onChange={(e) => { setReminderDate(e.target.value); autoSave({ reminderDate: e.target.value }); }}
+                />
+             </div>
 
-          <div className="space-y-4 pt-4 border-t border-black/10">
-            <div className="space-y-2">
-              <p className="text-[9px] uppercase tracking-[0.2em] text-black/30 font-bold px-1 text-center">New Engagement Entry</p>
-              <textarea 
-                placeholder="Log call details, portfolio sent, client feedback..." 
-                className="w-full bg-white/60 border border-white/40 rounded-2xl p-4 text-xs font-semibold focus:outline-none focus:bg-white text-black placeholder:text-black/20 transition-all italic resize-none h-32 shadow-sm"
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-              />
-            </div>
-            <button 
-              onClick={addHistoryNote}
-              disabled={!newNote.trim()}
-              className="w-full bg-black/10 text-black py-3 rounded-xl text-[9px] font-bold uppercase tracking-[0.2em] hover:bg-black hover:text-white transition-all flex items-center justify-center gap-2"
-            >
-              Append to Activity Log
-            </button>
-          </div>
+             <div className="relative shadow-2xl shadow-black/25 rounded-xl bg-white">
+                <textarea 
+                  placeholder="Log activity..." 
+                  className="w-full bg-transparent border-none rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-0 text-black placeholder:text-black/30 transition-all resize-none h-20"
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      addHistoryNote();
+                    }
+                  }}
+                />
+             </div>
+             <button 
+               onClick={addHistoryNote}
+               disabled={!newNote.trim()}
+               className="w-full bg-black text-white py-3 rounded-xl text-[9px] font-bold uppercase tracking-[0.2em] hover:opacity-90 active:scale-95 transition-all disabled:cursor-not-allowed disabled:text-white/50 shadow-2xl shadow-black/25 transform hover:-translate-y-0.5"
+             >
+               ADD TODAY'S ACTIVITY
+             </button>
+           </div>
         </div>
       </div>
     </div>

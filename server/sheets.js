@@ -17,7 +17,7 @@ async function getAuthClient() {
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 
-// NEW SCHEMA MAPPING TO USER'S PREFERRED COLUMNS (A-J) + TECHNICAL COLUMNS (K-R)
+// NEW SCHEMA MAPPING TO USER'S PREFERRED COLUMNS (A-J) + TECHNICAL COLUMNS (K-T)
 const SCHEMA = [
   'Lead Name',           // A (Business Name)
   'Phone Number',        // B (Phone)
@@ -36,7 +36,9 @@ const SCHEMA = [
   'Google Maps Link',    // O (Technical)
   'Retrieved Date',      // P (Technical)
   'Highlighted',         // Q (Technical)
-  'Call History'         // R (Technical - JSON)
+  'Call History',        // R (Technical - JSON)
+  'Instagram',           // S (Technical)
+  'Color'                // T (Technical - Card Color)
 ];
 
 async function initializeSheet() {
@@ -51,7 +53,7 @@ async function initializeSheet() {
 
     const headerRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:R1`,
+      range: `${sheetName}!A1:T1`,
     });
 
     const currentHeaders = headerRes.data.values ? headerRes.data.values[0] : [];
@@ -61,7 +63,7 @@ async function initializeSheet() {
     if (!headersMatch) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A1:R1`,
+        range: `${sheetName}!A1:T1`,
         valueInputOption: 'RAW',
         resource: { values: [SCHEMA] },
       });
@@ -83,7 +85,7 @@ async function getAllLeads() {
 
   const data = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:R`,
+    range: `${sheetName}!A:T`,
   });
 
   const rows = data.data.values;
@@ -114,6 +116,8 @@ async function getAllLeads() {
       ReminderRemark: lead.Notes || '',
       CallHistory: lead.CallHistory || '[]',
       Category: lead.Category || 'General',
+      Instagram: lead.Instagram || '',
+      Color: lead.Color || '',
       GoogleMapsLink: lead.GoogleMapsLink || (lead.LeadName ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.LeadName + ' ' + (lead.BusinessCity || ''))}` : '')
     };
   });
@@ -244,6 +248,36 @@ async function updateLead(placeId, updates) {
     }));
   }
 
+  // Website -> Col M (13th)
+  if (updates.website !== undefined) {
+    updatePromises.push(sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!M${actualRowIndex}`,
+      valueInputOption: 'RAW',
+      resource: { values: [[updates.website]] },
+    }));
+  }
+
+  // Instagram -> Col S (19th)
+  if (updates.instagram !== undefined) {
+    updatePromises.push(sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!S${actualRowIndex}`,
+      valueInputOption: 'RAW',
+      resource: { values: [[updates.instagram]] },
+    }));
+  }
+
+  // Color -> Col T (20th)
+  if (updates.color !== undefined) {
+    updatePromises.push(sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!T${actualRowIndex}`,
+      valueInputOption: 'RAW',
+      resource: { values: [[updates.color]] },
+    }));
+  }
+
   // Last Call Date -> Col E (5th)
   updatePromises.push(sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
@@ -282,14 +316,16 @@ async function appendLeads(leads) {
     lead.mapsUrl,        // O
     lead.retrievedDate,   // P
     'FALSE',             // Q (Highlighted)
-    '[]'                 // R (Call History)
+    '[]',                // R (Call History)
+    '',                  // S (Instagram)
+    ''                   // T (Color)
   ]);
 
   if (values.length === 0) return;
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:R`,
+    range: `${sheetName}!A:T`,
     valueInputOption: 'RAW',
     resource: { values },
   });

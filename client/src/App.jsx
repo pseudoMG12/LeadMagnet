@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { startOfToday, addDays, format } from 'date-fns';
 
@@ -20,11 +20,16 @@ function App() {
   const [viewMode, setViewMode] = useState('cards');
   const [sortConfig, setSortConfig] = useState({ key: 'LastUpdated', direction: 'desc' });
   const [selectedDate, setSelectedDate] = useState(startOfToday());
-  const scrollContainerRef = useRef(null);
+  const [anchorDate, setAnchorDate] = useState(startOfToday());
 
   const dates = useMemo(() => {
-    return Array.from({ length: 14 }).map((_, i) => addDays(startOfToday(), i - 4));
-  }, []);
+    return Array.from({ length: 30 }).map((_, i) => addDays(anchorDate, i - 4));
+  }, [anchorDate]);
+
+  const handleDateJump = (date) => {
+    setAnchorDate(date);
+    setSelectedDate(date);
+  };
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
@@ -90,9 +95,12 @@ function App() {
     return list;
   }, [leads, sortConfig]);
 
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const todayLeads = processedLeads.filter(l => l.ReminderDate === todayStr);
-  const displayLeads = activeTab === 'active' ? processedLeads : todayLeads;
+  // Filter leads based on the Selected Date in Timeline (defaults to Today)
+  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const scheduledLeads = processedLeads.filter(l => l.ReminderDate === selectedDateStr);
+  
+  // Display View Logic
+  const displayLeads = activeTab === 'active' ? processedLeads : scheduledLeads;
 
   return (
     <div className="min-h-screen bg-black text-white flex overflow-hidden selection:bg-white/10">
@@ -101,12 +109,13 @@ function App() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#050505]">
         <Header 
           selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           viewMode={viewMode}
           setViewMode={setViewMode}
           activeCount={leads.length}
-          todayCount={todayLeads.length}
+          todayCount={scheduledLeads.length}
           sortConfig={sortConfig}
           setSortConfig={setSortConfig}
         />
@@ -116,7 +125,7 @@ function App() {
             dates={dates}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
-            scrollContainerRef={scrollContainerRef}
+            onDateJump={handleDateJump}
           />
 
           <section className="animate-in fade-in duration-700">

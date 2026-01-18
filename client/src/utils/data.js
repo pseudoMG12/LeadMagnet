@@ -65,16 +65,10 @@ export const DUMMY_DATA = [
 ];
 
 export const CARD_COLORS = [
-  'bg-stone-100',    // Neutral
-  'bg-orange-50',     // Beige/Cream
-  'bg-lime-100',      // Pastel Lime
-  'bg-purple-100',    // Pastel Purple
-  'bg-amber-50',      // Soft Warmth
-  'bg-rose-100',      // Warm Rose
-  'bg-slate-100',     // Crisp Neutral
-  'bg-violet-100',    // Second Purple
-  'bg-yellow-50',     // Warm Ivory
-  'bg-emerald-50',    // Soft Neutral Green
+  'bg-white',
+  'bg-green-300',
+  'bg-yellow-300',
+  'bg-orange-300', 
 ];
 
 
