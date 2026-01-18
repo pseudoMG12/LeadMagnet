@@ -58,15 +58,48 @@ function App() {
       finalUpdates.callHistory = JSON.stringify([...history, newEntry]);
     }
 
+    // Map lowercase keys to Uppercase state keys for Optimistic Update
+    const FIELD_MAP = {
+      name: 'BusinessName',
+      phone: 'Phone',
+      city: 'City',
+      instagram: 'Instagram',
+      website: 'Website',
+      telecaller: 'Telecaller',
+      callStatus: 'CallStatus',
+      remarks: 'Remarks',
+      reminderDate: 'ReminderDate',
+      reminderRemark: 'ReminderRemark',
+      callHistory: 'CallHistory',
+      color: 'Color',
+      highlighted: 'Highlighted'
+    };
+
+    const optimisticUpdates = {};
+    Object.keys(finalUpdates).forEach(key => {
+      const mappedKey = FIELD_MAP[key] || key;
+      let value = finalUpdates[key];
+      // Handle special case for Highlighted (boolean to string 'TRUE'/'FALSE')
+      if (key === 'highlighted') {
+        value = value ? 'TRUE' : 'FALSE';
+      }
+      optimisticUpdates[mappedKey] = value;
+    });
+
     const updatedLeads = leads.map(l => 
-      l.PlaceID === placeId ? { ...l, ...finalUpdates, LastUpdated: new Date().toISOString() } : l
+      l.PlaceID === placeId ? { ...l, ...optimisticUpdates, LastUpdated: new Date().toISOString() } : l
     );
     setLeads(updatedLeads);
     try {
       await axios.patch(`${API_BASE}/lead/${placeId}`, finalUpdates);
-      fetchLeads(); // Refresh to ensure history is synced
+      // fetchLeads(); // Optional: We trust the optimistic update. Fetching might reset state unnecessarily or cause flicker. 
+      // Keeping it commented out or removed for "Instant" feel, or debouncing it. 
+      // For now, let's remove it to prioritize speed as per user request, or keep it if we really need to sync.
+      // The user wants "Color updated instantly".
     } catch (error) {
-      console.error('Sync failed');
+      console.error('Sync failed', error);
+      // Revert on failure could be implemented here
+      fetchLeads(); // Re-fetch to get correct state back
     }
   };
 
@@ -148,7 +181,12 @@ function App() {
               viewMode === 'cards' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8 animate-in zoom-in-95 duration-500">
                   {displayLeads.map((lead, idx) => (
-                    <LeadCard key={lead.PlaceID} lead={lead} onUpdate={fetchLeads} index={idx} />
+                    <LeadCard 
+                      key={lead.PlaceID} 
+                      lead={lead} 
+                      onUpdate={(updates) => handleInlineUpdate(lead.PlaceID, updates)} 
+                      index={idx} 
+                    />
                   ))}
                 </div>
               ) : (

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, MapPin, Globe, Star, ExternalLink, X } from 'lucide-react';
-import axios from 'axios';
 import { format, isValid } from 'date-fns';
 import { API_BASE, CARD_COLORS } from '../utils/data';
 import { safeFormat } from '../utils/date';
@@ -27,10 +26,10 @@ const LeadCard = ({ lead, onUpdate, index }) => {
   const handleUpdate = async (updates) => {
     setIsSaving(true);
     try {
-      await axios.patch(`${API_BASE}/lead/${lead.PlaceID}`, updates);
-      onUpdate();
+      // Delegate update to parent (App.jsx) which handles optimistic UI and API call
+      await onUpdate(updates);
     } catch (error) {
-      console.error('Update failed');
+      console.error('Update failed', error);
     } finally {
       setIsSaving(false);
     }
