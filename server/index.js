@@ -14,6 +14,19 @@ const router = express.Router();
 initializeSheet();
 
 // Endpoints
+router.post('/auth/login', (req, res) => {
+  const { accessId, password } = req.body;
+  const validId = process.env.AUTH_ID;
+  const validPass = process.env.AUTH_PASSWORD;
+
+  // Simple check
+  if (accessId === validId && password === validPass) {
+    return res.json({ success: true, token: 'session_valid' }); // Simple token for now
+  }
+  
+  return res.status(401).json({ success: false, message: 'Invalid credentials' });
+});
+
 router.get('/leads', async (req, res) => {
   try {
     const leads = await getAllLeads();

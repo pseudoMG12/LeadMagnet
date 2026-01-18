@@ -9,11 +9,13 @@ import Timeline from './components/Timeline';
 import ScraperForm from './components/ScraperForm';
 import LeadCard from './components/LeadCard';
 import SheetView from './components/SheetView';
+import Login from './components/Login';
 
 // Utils
 import { API_BASE, DUMMY_DATA, CARD_COLORS } from './utils/data';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [leads, setLeads] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'today'
@@ -26,6 +28,16 @@ function App() {
   const [activeView, setActiveView] = useState('crm'); // 'crm' | 'discovery'
   const [filterColor, setFilterColor] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (token) setIsAuthenticated(true);
+  }, []);
+
+  const handleLogin = (token) => {
+    localStorage.setItem('auth_token', token);
+    setIsAuthenticated(true);
+  };
 
   const dates = useMemo(() => {
     return Array.from({ length: 30 }).map((_, i) => addDays(anchorDate, i - 4));
@@ -178,6 +190,10 @@ function App() {
   
   // Display View Logic
   const displayLeads = activeTab === 'active' ? processedLeads : scheduledLeads;
+
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex overflow-hidden selection:bg-white/10">
