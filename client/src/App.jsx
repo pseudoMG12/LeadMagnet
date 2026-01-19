@@ -151,7 +151,15 @@ function App() {
         (l.Phone && l.Phone.toLowerCase().includes(lowerQuery)) ||
         (l.City && l.City.toLowerCase().includes(lowerQuery)) ||
         (l.Website && l.Website.toLowerCase().includes(lowerQuery)) ||
-        (l.Remarks && l.Remarks.toLowerCase().includes(lowerQuery))
+        (l.Remarks && l.Remarks.toLowerCase().includes(lowerQuery)) ||
+        (l.Telecaller && l.Telecaller.toLowerCase().includes(lowerQuery)) ||
+        (l.CallStatus && l.CallStatus.toLowerCase().includes(lowerQuery)) ||
+        (l.ReminderRemark && l.ReminderRemark.toLowerCase().includes(lowerQuery)) ||
+        (l.Instagram && l.Instagram.toLowerCase().includes(lowerQuery)) ||
+        (l.ReminderDate && l.ReminderDate.includes(lowerQuery)) ||
+        (l.LastUpdated && l.LastUpdated.includes(lowerQuery)) ||
+        (l.Category && l.Category.toLowerCase().includes(lowerQuery)) ||
+        (l.CallHistory && l.CallHistory.toLowerCase().includes(lowerQuery))
       );
     }
 
