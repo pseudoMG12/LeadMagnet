@@ -1,13 +1,46 @@
-import React from 'react';
-import { Target, Inbox, LayoutGrid, Table, Search, Menu } from 'lucide-react'; // Added Menu
+import React, { useState } from 'react';
+import { Target, Inbox, LayoutGrid, Table, Search, Menu, X } from 'lucide-react';
 import { CARD_COLORS } from '../utils/data';
 import { format, isSameDay, startOfToday } from 'date-fns';
 
-const Header = ({ selectedDate, setSelectedDate, activeTab, setActiveTab, viewMode, setViewMode, activeCount, todayCount, sortConfig, setSortConfig, filterColor, setFilterColor, searchQuery, setSearchQuery, toggleSidebar }) => { // Added toggleSidebar
+const Header = ({ selectedDate, setSelectedDate, activeTab, setActiveTab, viewMode, setViewMode, activeCount, todayCount, sortConfig, setSortConfig, filterColor, setFilterColor, searchQuery, setSearchQuery, toggleSidebar }) => {
   const isToday = isSameDay(selectedDate, startOfToday());
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   return (
-    <header className="h-16 lg:h-20 px-4 lg:px-8 border-b border-white/5 flex items-center justify-between bg-black/40 backdrop-blur-xl shrink-0 gap-4">
+    <header className="h-16 lg:h-20 px-4 lg:px-8 border-b border-white/5 flex items-center justify-between bg-black/40 backdrop-blur-xl shrink-0 gap-4 relative">
+      
+      {/* Mobile Search Overlay */}
+      {isMobileSearchOpen && (
+        <div className="absolute inset-0 bg-[#0A0A0A] z-50 flex items-center px-4 animate-in slide-in-from-top-2 duration-200">
+           <div className="flex-1 flex items-center bg-white/5 rounded-xl px-3 py-2.5 border border-white/5 mr-3">
+             <Search size={16} className="text-white/30 mr-3" />
+             <input 
+               autoFocus
+               type="text" 
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               placeholder="Search leads..." 
+               className="flex-1 bg-transparent text-sm text-white placeholder:text-white/20 focus:outline-none"
+             />
+             {searchQuery && (
+               <button onClick={() => setSearchQuery('')} className="p-1 hover:bg-white/10 rounded-full">
+                 <X size={14} className="text-white/40" />
+               </button>
+             )}
+          </div>
+          <button 
+            onClick={() => {
+              setIsMobileSearchOpen(false);
+              setSearchQuery(''); 
+            }}
+            className="text-xs font-semibold text-white/50 hover:text-white transition-colors tracking-wide"
+          >
+            CANCEL
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center gap-4 lg:gap-6">
         {/* Mobile Menu Button */}
         <button 
@@ -58,6 +91,15 @@ const Header = ({ selectedDate, setSelectedDate, activeTab, setActiveTab, viewMo
       </div>
 
       <div className="flex items-center gap-2 lg:gap-4 overflow-x-auto no-scrollbar mask-gradient-right">
+        
+        {/* Mobile Search Button */}
+        <button 
+           onClick={() => setIsMobileSearchOpen(true)}
+           className="md:hidden p-2 rounded-lg text-white/40 hover:text-white transition-colors"
+        >
+           <Search size={20} />
+        </button>
+
         {/* Color Filter - Scrollable on mobile */}
         <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 items-center gap-1 shrink-0">
           <button
@@ -115,3 +157,4 @@ const Header = ({ selectedDate, setSelectedDate, activeTab, setActiveTab, viewMo
 };
 
 export default Header;
+
