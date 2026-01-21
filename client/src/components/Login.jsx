@@ -46,6 +46,9 @@ const Login = ({ onLogin }) => {
                   onChange={(e) => setFormData({...formData, accessId: e.target.value})}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all text-sm font-light"
                   placeholder="Enter ID"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                 />
               </div>
 
@@ -57,6 +60,9 @@ const Login = ({ onLogin }) => {
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all text-sm font-light"
                   placeholder="Enter Password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                 />
               </div>
 

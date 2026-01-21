@@ -235,7 +235,7 @@ function App() {
           toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
         />
 
-        <div className="flex-1 overflow-y-auto p-10 space-y-12 no-scrollbar lg:custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-8 md:space-y-12 no-scrollbar lg:custom-scrollbar">
           <Timeline 
             dates={dates}
             selectedDate={selectedDate}

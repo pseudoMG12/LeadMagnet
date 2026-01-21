@@ -77,55 +77,90 @@ async function scrapeLeads(city, categories, existingPlaceIds) {
     const query = `${category} in ${city}`;
     console.log(`Searching for: ${query}`);
 
-    try {
-      // 1. Text Search
-      const searchRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
-        params: {
+    let nextPageToken = null;
+    let categoryCount = 0;
+    const MAX_PER_CATEGORY = 30;
+
+    do {
+      try {
+        // 1. Text Search
+        const searchParams = {
           query,
           key: GOOGLE_MAPS_API_KEY
-        }
-      });
-      currentUsageUSD += PRICING.TEXT_SEARCH;
+        };
+        if (nextPageToken) searchParams.pagetoken = nextPageToken;
 
-      const results = searchRes.data.results || [];
-      
-      for (const place of results) {
-        if (currentUsageUSD >= USAGE_LIMIT_USD) break;
-        if (existingPlaceIds.has(place.place_id)) continue;
-
-        // 2. Place Details
-        const detailsRes = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
-          params: {
-            place_id: place.place_id,
-            fields: 'name,formatted_phone_number,website,url,place_id',
-            key: GOOGLE_MAPS_API_KEY
-          }
+        const searchRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+          params: searchParams
         });
-        currentUsageUSD += PRICING.PLACE_DETAILS;
+        currentUsageUSD += PRICING.TEXT_SEARCH;
 
-        const details = detailsRes.data.result;
-        if (!details) continue;
-
-        const websiteStatus = await classifyWebsite(details.website);
+        const results = searchRes.data.results || [];
+        nextPageToken = searchRes.data.next_page_token;
         
-        // Only keep non-working websites as per requirements
-        if (websiteStatus !== 'working') {
-          allNewLeads.push({
-            placeId: details.place_id,
-            name: details.name,
-            city,
-            category,
-            phone: details.formatted_phone_number || '',
-            website: details.website || '',
-            websiteStatus,
-            mapsUrl: details.url,
-            retrievedDate: new Date().toISOString()
+        for (const place of results) {
+          if (currentUsageUSD >= USAGE_LIMIT_USD) break;
+          if (categoryCount >= MAX_PER_CATEGORY) break;
+          if (existingPlaceIds.has(place.place_id)) continue;
+
+          // 2. Place Details
+          const detailsRes = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
+            params: {
+              place_id: place.place_id,
+              fields: 'name,formatted_phone_number,website,url,place_id,reviews',
+              key: GOOGLE_MAPS_API_KEY
+            }
           });
+          currentUsageUSD += PRICING.PLACE_DETAILS;
+
+          const details = detailsRes.data.result;
+          if (!details) continue;
+
+          // Skip if no reviews
+          if (!details.reviews || details.reviews.length === 0) {
+            console.log(`Skipping ${details.name}: No reviews found.`);
+            continue;
+          }
+
+          // Find the latest review timestamp
+          const latestReviewTime = Math.max(...details.reviews.map(r => r.time));
+          const oneYearAgo = Math.floor(Date.now() / 1000) - (365 * 24 * 60 * 60);
+
+          // Skip if latest review is older than a year
+          if (latestReviewTime < oneYearAgo) {
+            console.log(`Skipping ${details.name}: Latest review is too old (${new Date(latestReviewTime * 1000).toLocaleDateString()}).`);
+            continue;
+          }
+
+          const websiteStatus = await classifyWebsite(details.website);
+          
+          // Only keep non-working websites as per requirements
+          if (websiteStatus !== 'working') {
+            allNewLeads.push({
+              placeId: details.place_id,
+              name: details.name,
+              city,
+              category,
+              phone: details.formatted_phone_number || '',
+              website: details.website || '',
+              websiteStatus,
+              mapsUrl: details.url,
+              retrievedDate: new Date().toISOString()
+            });
+            categoryCount++;
+          }
         }
+
+        // Wait a bit if there's a next page (required by Google API for token to become active)
+        if (nextPageToken && categoryCount < MAX_PER_CATEGORY) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+      } catch (error) {
+        console.error(`Error searching for ${category}:`, error.message);
+        break;
       }
-    } catch (error) {
-      console.error(`Error searching for ${category}:`, error.message);
-    }
+    } while (nextPageToken && categoryCount < MAX_PER_CATEGORY && currentUsageUSD < USAGE_LIMIT_USD);
   }
 
   return allNewLeads;

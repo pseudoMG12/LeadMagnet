@@ -51,9 +51,9 @@ const LeadCard = ({ lead, onUpdate, index }) => {
           <div className="flex justify-between items-start gap-4">
             <div className="flex-1 flex items-center gap-2 min-w-0">
               <input 
-                className="text-lg serif tracking-tight leading-tight flex-1 bg-transparent border-none focus:outline-none focus:bg-black/5 rounded-lg px-1 transition-all text-black font-medium truncate"
+                className="text-lg serif tracking-tight leading-tight flex-1 bg-transparent border-none focus:outline-none focus:bg-black/5 rounded-lg px-1 transition-all text-black font-medium truncate pointer-events-auto"
                 value={businessName}
-                onClick={(e) => e.stopPropagation()}
+                // Removed stopPropagation to allow modal to open on mobile
                 onChange={(e) => setBusinessName(e.target.value)}
                 onBlur={() => businessName !== lead.BusinessName && handleUpdate({ name: businessName })}
                 title={businessName}

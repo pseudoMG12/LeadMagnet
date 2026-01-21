@@ -85,55 +85,61 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 md:bg-black/80 backdrop-blur-md p-0 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
       <div 
-        className={`${selectedColor} w-full max-w-[75rem] rounded-4xl p-3 relative shadow-2xl border  h-[90vh] flex gap-3 transition-all duration-300`}
+        className={`${selectedColor} w-full h-full md:h-[90vh] md:max-w-[75rem] md:rounded-3xl p-2 md:p-3 relative shadow-2xl border flex flex-col lg:flex-row gap-3 transition-all duration-300 overflow-y-auto md:overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 bg-white text-black rounded-full  border border-black/5 hover:scale-110 transition-transform z-50"
+          className="absolute top-4 right-4 p-2 bg-white text-black rounded-full border border-black/5 hover:scale-110 transition-transform z-50 shadow-xl"
         >
           <X size={20} strokeWidth={2} />
         </button>
 
         {/* --- LEFT PANEL: INFO & INTELLIGENCE --- */}
-         <div className="flex-[2] bg-gradient-to-b from-white via-white/80 to-white/60  rounded-3xl p-6 flex flex-col gap-5 shadow-2xl overflow-y-auto custom-scrollbar-black text-black">
+         <div className="flex-none lg:flex-[2] bg-gradient-to-b from-white via-white/80 to-white/60 rounded-2xl md:rounded-3xl p-4 md:p-6 flex flex-col gap-5 shadow-2xl md:overflow-y-auto custom-scrollbar-black text-black min-h-fit">
            
            {/* Header Section */}
            <div className="space-y-3">
-               <div className="flex items-center justify-between">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Business Entity</span>
-                  <div className="flex items-center gap-1.5 mr-10">
+                  <div className="flex flex-wrap items-center gap-1.5 md:mr-10">
                     {CARD_COLORS.map((c) => (
                        <button 
                          key={c}
                          onClick={(e) => { e.stopPropagation(); setSelectedColor(c); autoSave({ color: c }); }}
-                         className={`w-3.5 h-3.5 rounded-full border border-black/10 transition-all ${c} ${selectedColor === c ? 'scale-125 ring-1 ring-black/30 shadow-sm' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                         className={`w-4 h-4 md:w-3.5 md:h-3.5 rounded-full border border-black/10 transition-all ${c} ${selectedColor === c ? 'scale-125 ring-2 ring-black/30 shadow-sm' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
                          title="Set Color"
                        />
                      ))}
                   </div>
                </div>
                <input 
-                 className="w-full text-4xl serif tracking-tight leading-none bg-transparent border-none focus:outline-none placeholder:text-black/10 -ml-1 py-1 text-black"
+                 className="w-full text-2xl md:text-4xl serif tracking-tight leading-tight bg-transparent border-none focus:outline-none placeholder:text-black/10 -ml-1 py-1 text-black font-medium"
                  value={businessName}
                  onChange={(e) => { setBusinessName(e.target.value); autoSave({ name: e.target.value }); }}
                  placeholder="Business Name"
                />
                
                {/* Quick Pills */}
-               <div className="flex gap-2">
+               <div className="flex flex-wrap gap-2">
                  <a href={lead.GoogleMapsLink} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-black/5 hover:bg-black/10 rounded-full text-black/60 transition-all text-[10px] font-bold uppercase tracking-wide">
                     <MapPin size={10} className="opacity-50" />
                     <span>Maps</span>
                  </a>
+                 {website && (
+                   <a href={website} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-black/5 hover:bg-black/10 rounded-full text-black/60 transition-all text-[10px] font-bold uppercase tracking-wide">
+                     <Globe size={10} className="opacity-50" />
+                     <span>Website</span>
+                   </a>
+                 )}
                </div>
            </div>
 
            {/* Cards Grid */}
-           <div className="grid grid-cols-3 gap-3">
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {/* Card 1: Location */}
               <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
                   <div className="flex items-center gap-2 text-black/40 mb-1">
@@ -186,7 +192,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                          <Globe size={12} />
                          <span className="text-[9px] font-bold uppercase tracking-wider">Website</span>
                       </div>
-                      {website && <a href={website} target="_blank" rel="noreferrer" className="absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full"><ExternalLink size={12} /></a>}
+                      {website && <a href={website} target="_blank" rel="noreferrer" className="md:absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full"><ExternalLink size={12} /></a>}
                   </div>
                   <input 
                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
@@ -233,15 +239,15 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
            </div>
            
            {/* Integrated Intelligence Box */}
-           <div className="mt-auto flex-1 flex flex-col min-h-[150px]">
+           <div className="mt-auto flex-1 flex flex-col min-h-[200px] mb-4 lg:mb-0">
                <div className="flex justify-between items-center mb-2 px-1">
                    <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Internal Intelligence</span>
                    {reminderRemark && <span className="text-[9px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Sync: {reminderRemark}</span>}
                </div>
                
-               <div className="relative group flex-1">
+               <div className="relative group flex-1 min-h-[150px]">
                   <textarea 
-                     className="w-full h-full bg-white/50 shadow-xl focus:border-black/10 focus:bg-white rounded-2xl p-5 text-sm font-medium text-black placeholder:text-black/20 focus:outline-none transition-all resize-none leading-relaxed custom-scrollbar-black pb-14  min-h-[120px]"
+                     className="w-full h-full bg-white/50 shadow-xl focus:border-black/10 focus:bg-white rounded-2xl p-4 md:p-5 text-sm font-medium text-black placeholder:text-black/20 focus:outline-none transition-all resize-none leading-relaxed custom-scrollbar-black pb-14"
                      placeholder="Enter detailed strategic remarks and intelligence..."
                      value={remarks}
                      onChange={(e) => setRemarks(e.target.value)}
@@ -250,7 +256,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                   <button 
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="absolute bottom-4 right-4 px-5 py-2 bg-black text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black/80 active:scale-95 transition-all shadow-lg flex items-center gap-2"
+                    className="absolute bottom-3 right-3 md:bottom-4 md:right-4 px-4 md:px-5 py-2 bg-black text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black/80 active:scale-95 transition-all shadow-lg flex items-center gap-2"
                   >
                     {isSaving ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <span>Save Sync</span>}
                   </button>
@@ -259,14 +265,14 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
         </div>
 
         {/* --- RIGHT PANEL: ACTIVITY LOG --- */}
-         <div className="flex-1 bg-white/80  rounded-3xl relative shadow-2xl overflow-hidden text-black flex flex-col">
+         <div className="flex-none lg:flex-1 bg-white/80 rounded-2xl md:rounded-3xl relative shadow-2xl overflow-hidden text-black flex flex-col min-h-[400px] lg:min-h-0 mb-4 lg:mb-0">
             <div className="absolute top-0 left-0 right-0 p-5 pb-3 flex justify-between items-center z-20 backdrop-blur-sm bg-gradient-to-b from-white to-transparent">
                <span className="text-[10px] uppercase tracking-[0.3em] text-black/40 font-bold">Activity Feed</span>
                 <span className="text-[10px] font-bold text-black/30">{history.length}</span>
            </div>
            
            <div 
-             className="flex-1 overflow-y-auto space-y-5 custom-scrollbar-black p-5 pt-20 pb-64"
+             className="flex-1 overflow-y-auto space-y-5 custom-scrollbar-black p-5 pt-16 pb-64"
              style={{ 
                maskImage: 'linear-gradient(to bottom, transparent 0px, black 80px, black calc(100% - 250px), transparent 100%)',
                WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 80px, black calc(100% - 250px), transparent 100%)' 
@@ -281,31 +287,31 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                     </div>
                   </div>
                 )) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
+                  <div className="h-40 lg:h-full flex flex-col items-center justify-center text-center opacity-30">
                      <p className="text-[9px] uppercase tracking-widest font-bold">No Activity</p>
                   </div>
                 )}
            </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col gap-3 backdrop-blur-xs bg-gradient-to-t from-white/50 to-transparent">
+            <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 flex flex-col gap-3 backdrop-blur-md bg-white/90 border-t border-black/5">
              <div className="mb-2 flex items-center justify-between transition-colors">
                 <div className="flex items-center gap-2">
                    <Calendar size={12} className="text-black transition-colors" />
-                   <span className="text-[10px] font-bold uppercase tracking-wider text-black transition-colors">Set Next Reminder</span>
+                   <span className="text-[10px] font-bold uppercase tracking-wider text-black transition-colors">Next Reminder</span>
                 </div>
                 <input 
                   type="date" 
-                  className="bg-black text-white rounded-lg px-4 py-2 text-[10px] font-bold uppercase focus:outline-none cursor-pointer shadow-lg border-none hover:scale-105 transition-transform"
+                  className="bg-black text-white rounded-lg px-3 md:px-4 py-2 text-[10px] font-bold uppercase focus:outline-none cursor-pointer shadow-lg border-none hover:scale-105 transition-transform"
                   style={{ colorScheme: 'dark' }}
                   value={reminderDate}
                   onChange={(e) => { setReminderDate(e.target.value); autoSave({ reminderDate: e.target.value }); }}
                 />
              </div>
 
-             <div className="relative shadow-2xl shadow-black/25 rounded-xl bg-white">
+             <div className="relative shadow-2xl shadow-black/25 rounded-xl bg-white border border-black/5">
                 <textarea 
                   placeholder="Log activity..." 
-                  className="w-full bg-transparent border-none rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-0 text-black placeholder:text-black/30 transition-all resize-none h-20"
+                  className="w-full bg-transparent border-none rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-0 text-black placeholder:text-black/30 transition-all resize-none h-16 md:h-20"
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
                   onKeyDown={(e) => {
@@ -324,7 +330,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                ADD TODAY'S ACTIVITY
              </button>
            </div>
-        </div>
+         </div>
       </div>
     </div>
   );

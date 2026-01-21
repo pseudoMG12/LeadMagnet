@@ -15,15 +15,23 @@ initializeSheet();
 
 // Endpoints
 router.post('/auth/login', (req, res) => {
-  const { accessId, password } = req.body;
-  const validId = process.env.AUTH_ID;
-  const validPass = process.env.AUTH_PASSWORD;
+  const accessId = (req.body.accessId || '').trim();
+  const password = (req.body.password || '').trim();
+  
+  // Support comma-separated lists from env
+  const validIds = (process.env.AUTH_ID || '').split(',').map(id => id.trim());
+  const validPasswords = (process.env.AUTH_PASSWORD || '').split(',').map(p => p.trim());
 
-  // Simple check
-  if (accessId === validId && password === validPass) {
-    return res.json({ success: true, token: 'session_valid' }); // Simple token for now
+  // Check if credentials match any in the allowed lists
+  const isValidId = validIds.includes(accessId);
+  const isValidPass = validPasswords.includes(password);
+
+  if (isValidId && isValidPass && accessId !== '' && password !== '') {
+    console.log(`[AUTH] Successful login for: ${accessId}`);
+    return res.json({ success: true, token: 'session_valid' });
   }
   
+  console.warn(`[AUTH] Failed login attempt for: ${accessId}`);
   return res.status(401).json({ success: false, message: 'Invalid credentials' });
 });
 
