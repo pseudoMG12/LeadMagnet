@@ -1,93 +1,130 @@
-import React, { useState } from 'react';
-import { Phone, Globe, Star, ExternalLink, X, MapPin, Instagram, Link as LinkIcon, AlertCircle, Calendar, Activity } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Phone, Globe, Star, ExternalLink, X, MapPin, Instagram, Link as LinkIcon, AlertCircle, Calendar, Activity, Check, Cloud } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { safeFormat } from '../utils/date';
 
 import { CARD_COLORS } from '../utils/data';
 
 const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor }) => {
-  const [businessName, setBusinessName] = useState(lead.BusinessName);
-  const [phone, setPhone] = useState(lead.Phone);
-  const [city, setCity] = useState(lead.City);
-  const [instagram, setInstagram] = useState(lead.Instagram || '');
-  const [website, setWebsite] = useState(lead.Website || '');
-  const [telecaller, setTelecaller] = useState(lead.Telecaller || '');
-  const [callStatus, setCallStatus] = useState(lead.CallStatus || 'Not Contacted');
-  const [remarks, setRemarks] = useState(lead.Remarks);
-  const [reminderDate, setReminderDate] = useState(lead.ReminderDate || '');
-  const [reminderRemark, setReminderRemark] = useState(lead.ReminderRemark || '');
-  const [newNote, setNewNote] = useState('');
-  const [history, setHistory] = useState(JSON.parse(lead.CallHistory || '[]'));
-  // Use lead.Color if it exists, otherwise fall back to the index-based initialColor (or white)
-  const [selectedColor, setSelectedColor] = useState(lead.Color || initialColor || 'bg-white');
+  // Use a local state object for all fields to avoid stale closure issues during auto-save
+  const [formData, setFormData] = useState({
+    name: lead.BusinessName,
+    phone: lead.Phone,
+    city: lead.City,
+    instagram: lead.Instagram || '',
+    website: lead.Website || '',
+    telecaller: lead.Telecaller || '',
+    callStatus: lead.CallStatus || 'Not Contacted',
+    remarks: lead.Remarks || '',
+    reminderDate: lead.ReminderDate || '',
+    reminderRemark: lead.ReminderRemark || '',
+    color: lead.Color || initialColor || 'bg-white',
+    history: JSON.parse(lead.CallHistory || '[]')
+  });
 
-  // Auto-save function for all fields except remarks
-  const autoSave = (updatedFields = {}) => {
-    onUpdate({
-      name: businessName,
-      phone: phone,
-      city: city,
-      instagram: instagram,
-      website: website,
-      telecaller: telecaller,
-      callStatus: callStatus,
-      remarks: remarks,
-      reminderDate: reminderDate,
-      reminderRemark: reminderRemark,
-      callHistory: JSON.stringify(history),
-      color: selectedColor,
-      ...updatedFields
-    });
+  const [newNote, setNewNote] = useState('');
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'waiting' | 'saving' | 'saved'
+  const debounceTimer = useRef(null);
+  const isInitialMount = useRef(true);
+  
+  // Critical for preventing partial saves: Always keep a ref to the latest state
+  const latestData = useRef(formData);
+  useEffect(() => {
+    latestData.current = formData;
+  }, [formData]);
+
+  // Auto-save logic
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    setSaveStatus('waiting');
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    debounceTimer.current = setTimeout(() => {
+      performSave();
+    }, 1500); // 1.5s debounce for intelligence text
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [formData]);
+
+  const performSave = async (overrides = {}) => {
+    // Merge latest data with any specific overrides (like a new history note)
+    const dataToSave = { ...latestData.current, ...overrides };
+    setSaveStatus('saving');
+    
+    try {
+      await onUpdate({
+        name: dataToSave.name,
+        phone: dataToSave.phone,
+        city: dataToSave.city,
+        instagram: dataToSave.instagram,
+        website: dataToSave.website,
+        telecaller: dataToSave.telecaller,
+        callStatus: dataToSave.callStatus,
+        remarks: dataToSave.remarks,
+        reminderDate: dataToSave.reminderDate,
+        reminderRemark: dataToSave.reminderRemark,
+        callHistory: JSON.stringify(dataToSave.history),
+        color: dataToSave.color
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      setSaveStatus('idle');
+      console.error("Save failed in modal", error);
+    }
   };
 
-  // Manual save for remarks only
-  const handleSave = () => {
-    onUpdate({
-      name: businessName,
-      phone: phone,
-      city: city,
-      instagram: instagram,
-      website: website,
-      telecaller: telecaller,
-      callStatus: callStatus,
-      remarks: remarks,
-      reminderDate: reminderDate,
-      reminderRemark: reminderRemark,
-      callHistory: JSON.stringify(history),
-      color: selectedColor
-    });
+  const updateField = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleManualSave = () => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    // Force immediate save of EVERYTHING in the current state
+    performSave();
   };
 
   const addHistoryNote = () => {
     if (!newNote.trim()) return;
-    const newEntry = { date: new Date().toISOString(), note: newNote.trim() };
-    const updatedHistory = [...history, newEntry];
     
-    setHistory(updatedHistory);
-    setReminderRemark(newNote.trim());
+    const newEntry = { date: new Date().toISOString(), note: newNote.trim() };
+    const updatedHistory = [...formData.history, newEntry];
+    
+    // For local reliability, we update state and force an immediate save for notes
+    setFormData(prev => ({ 
+      ...prev, 
+      history: updatedHistory,
+      reminderRemark: newNote.trim()
+    }));
+    
     setNewNote('');
-
-    // Auto-save immediately
-    onUpdate({
-      name: businessName,
-      phone: phone,
-      city: city,
-      instagram: instagram,
-      website: website,
-      telecaller: telecaller,
-      callStatus: callStatus,
-      remarks: remarks,
-      reminderDate: reminderDate,
-      reminderRemark: newNote.trim(),
-      callHistory: JSON.stringify(updatedHistory),
-      color: selectedColor
+    
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    performSave({ 
+      history: updatedHistory, 
+      reminderRemark: newNote.trim() 
     });
+  };
+
+  const getStatusIcon = () => {
+    switch (saveStatus) {
+      case 'waiting': return <Cloud size={14} className="text-black/20 animate-pulse" />;
+      case 'saving': return <div className="w-3.5 h-3.5 border-2 border-black/10 border-t-black rounded-full animate-spin" />;
+      case 'saved': return <Check size={14} className="text-green-600" />;
+      default: return null;
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 md:bg-black/80 backdrop-blur-md p-0 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
       <div 
-        className={`${selectedColor} w-full h-full md:h-[90vh] md:max-w-[75rem] md:rounded-3xl p-2 md:p-3 relative shadow-2xl border flex flex-col lg:flex-row gap-3 transition-all duration-300 overflow-y-auto md:overflow-hidden`}
+        className={`${formData.color} w-full h-full md:h-[90vh] md:max-w-[75rem] md:rounded-3xl p-2 md:p-3 relative shadow-2xl border flex flex-col lg:flex-row gap-3 transition-all duration-300 overflow-y-auto md:overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
@@ -104,13 +141,16 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
            {/* Header Section */}
            <div className="space-y-3">
                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Business Entity</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Business Entity</span>
+                    {getStatusIcon()}
+                  </div>
                   <div className="flex flex-wrap items-center gap-1.5 md:mr-10">
                     {CARD_COLORS.map((c) => (
                        <button 
                          key={c}
-                         onClick={(e) => { e.stopPropagation(); setSelectedColor(c); autoSave({ color: c }); }}
-                         className={`w-4 h-4 md:w-3.5 md:h-3.5 rounded-full border border-black/10 transition-all ${c} ${selectedColor === c ? 'scale-125 ring-2 ring-black/30 shadow-sm' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                         onClick={(e) => { e.stopPropagation(); updateField('color', c); }}
+                         className={`w-4 h-4 md:w-3.5 md:h-3.5 rounded-full border border-black/10 transition-all ${c} ${formData.color === c ? 'scale-125 ring-2 ring-black/30 shadow-sm' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
                          title="Set Color"
                        />
                      ))}
@@ -118,8 +158,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                </div>
                <input 
                  className="w-full text-2xl md:text-4xl serif tracking-tight leading-tight bg-transparent border-none focus:outline-none placeholder:text-black/10 -ml-1 py-1 text-black font-medium"
-                 value={businessName}
-                 onChange={(e) => { setBusinessName(e.target.value); autoSave({ name: e.target.value }); }}
+                 value={formData.name}
+                 onChange={(e) => updateField('name', e.target.value)}
                  placeholder="Business Name"
                />
                
@@ -129,8 +169,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                     <MapPin size={10} className="opacity-50" />
                     <span>Maps</span>
                  </a>
-                 {website && (
-                   <a href={website} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-black/5 hover:bg-black/10 rounded-full text-black/60 transition-all text-[10px] font-bold uppercase tracking-wide">
+                 {formData.website && (
+                   <a href={formData.website} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-black/5 hover:bg-black/10 rounded-full text-black/60 transition-all text-[10px] font-bold uppercase tracking-wide">
                      <Globe size={10} className="opacity-50" />
                      <span>Website</span>
                    </a>
@@ -149,8 +189,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                   <input 
                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
                     placeholder="Add City..."
-                    value={city}
-                    onChange={(e) => { setCity(e.target.value); autoSave({ city: e.target.value }); }}
+                    value={formData.city}
+                    onChange={(e) => updateField('city', e.target.value)}
                   />
               </div>
 
@@ -163,8 +203,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                   <input 
                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
                     placeholder="Add Phone..."
-                    value={phone}
-                    onChange={(e) => { setPhone(e.target.value); autoSave({ phone: e.target.value }); }}
+                    value={formData.phone}
+                    onChange={(e) => updateField('phone', e.target.value)}
                   />
               </div>
 
@@ -180,8 +220,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                   <input 
                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
                     placeholder="@username"
-                    value={instagram}
-                    onChange={(e) => { setInstagram(e.target.value); autoSave({ instagram: e.target.value }); }}
+                    value={formData.instagram}
+                    onChange={(e) => updateField('instagram', e.target.value)}
                   />
               </div>
 
@@ -192,13 +232,13 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                          <Globe size={12} />
                          <span className="text-[9px] font-bold uppercase tracking-wider">Website</span>
                       </div>
-                      {website && <a href={website} target="_blank" rel="noreferrer" className="md:absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full"><ExternalLink size={12} /></a>}
+                      {formData.website && <a href={formData.website} target="_blank" rel="noreferrer" className="md:absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full"><ExternalLink size={12} /></a>}
                   </div>
                   <input 
                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
                     placeholder="https://..."
-                    value={website}
-                    onChange={(e) => { setWebsite(e.target.value); autoSave({ website: e.target.value }); }}
+                    value={formData.website}
+                    onChange={(e) => updateField('website', e.target.value)}
                   />
               </div>
 
@@ -210,8 +250,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                   </div>
                   <select 
                      className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none cursor-pointer appearance-none"
-                     value={callStatus}
-                     onChange={(e) => { setCallStatus(e.target.value); autoSave({ callStatus: e.target.value }); }}
+                     value={formData.callStatus}
+                     onChange={(e) => updateField('callStatus', e.target.value)}
                    >
                       <option value="Not Contacted">Not Contacted</option>
                       <option value="Connected">Connected</option>
@@ -231,8 +271,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                    <input 
                      className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
                      placeholder="Select Telecaller..."
-                     value={telecaller}
-                     onChange={(e) => { setTelecaller(e.target.value); autoSave({ telecaller: e.target.value }); }}
+                     value={formData.telecaller}
+                     onChange={(e) => updateField('telecaller', e.target.value)}
                    />
                </div>
 
@@ -242,33 +282,33 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
            <div className="mt-auto flex-1 flex flex-col min-h-[200px] mb-4 lg:mb-0">
                <div className="flex justify-between items-center mb-2 px-1">
                    <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Internal Intelligence</span>
-                   {reminderRemark && <span className="text-[9px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Sync: {reminderRemark}</span>}
+                   {formData.reminderRemark && <span className="text-[9px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Sync: {formData.reminderRemark}</span>}
                </div>
                
                <div className="relative group flex-1 min-h-[150px]">
                   <textarea 
                      className="w-full h-full bg-white/50 shadow-xl focus:border-black/10 focus:bg-white rounded-2xl p-4 md:p-5 text-sm font-medium text-black placeholder:text-black/20 focus:outline-none transition-all resize-none leading-relaxed custom-scrollbar-black pb-14"
                      placeholder="Enter detailed strategic remarks and intelligence..."
-                     value={remarks}
-                     onChange={(e) => setRemarks(e.target.value)}
+                     value={formData.remarks}
+                     onChange={(e) => updateField('remarks', e.target.value)}
                   />
                   
                   <button 
-                    onClick={handleSave}
-                    disabled={isSaving}
+                    onClick={handleManualSave}
+                    disabled={saveStatus === 'saving'}
                     className="absolute bottom-3 right-3 md:bottom-4 md:right-4 px-4 md:px-5 py-2 bg-black text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black/80 active:scale-95 transition-all shadow-lg flex items-center gap-2"
                   >
-                    {isSaving ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <span>Save Sync</span>}
+                    {saveStatus === 'saving' ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <span>Save Sync</span>}
                   </button>
                </div>
            </div>
-        </div>
+         </div>
 
         {/* --- RIGHT PANEL: ACTIVITY LOG --- */}
          <div className="flex-none lg:flex-1 bg-white/80 rounded-2xl md:rounded-3xl relative shadow-2xl overflow-hidden text-black flex flex-col min-h-[400px] lg:min-h-0 mb-4 lg:mb-0">
             <div className="absolute top-0 left-0 right-0 p-5 pb-3 flex justify-between items-center z-20 backdrop-blur-sm bg-gradient-to-b from-white to-transparent">
                <span className="text-[10px] uppercase tracking-[0.3em] text-black/40 font-bold">Activity Feed</span>
-                <span className="text-[10px] font-bold text-black/30">{history.length}</span>
+                <span className="text-[10px] font-bold text-black/30">{formData.history.length}</span>
            </div>
            
            <div 
@@ -278,7 +318,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                WebkitMaskImage: 'linear-gradient(to bottom, transparent 0px, black 80px, black calc(100% - 250px), transparent 100%)' 
              }}
            >
-               {history.length > 0 ? [...history].reverse().map((h, i) => (
+               {formData.history.length > 0 ? [...formData.history].reverse().map((h, i) => (
                   <div key={i} className="relative pl-4 border-l-2 border-black/5">
                     <div className="absolute top-1.5 left-[-5px] w-2.5 h-2.5 rounded-full bg-white border-2 border-black/10" />
                     <p className="text-[9px] uppercase tracking-wider text-black/40 font-bold mb-1">{safeFormat(h.date, 'MMM dd, HH:mm')}</p>
@@ -303,8 +343,8 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                   type="date" 
                   className="bg-black text-white rounded-lg px-3 md:px-4 py-2 text-[10px] font-bold uppercase focus:outline-none cursor-pointer shadow-lg border-none hover:scale-105 transition-transform"
                   style={{ colorScheme: 'dark' }}
-                  value={reminderDate}
-                  onChange={(e) => { setReminderDate(e.target.value); autoSave({ reminderDate: e.target.value }); }}
+                  value={formData.reminderDate}
+                  onChange={(e) => updateField('reminderDate', e.target.value)}
                 />
              </div>
 

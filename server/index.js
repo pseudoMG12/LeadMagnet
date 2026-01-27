@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { initializeSheet, getAllLeads, updateLead, appendLeads, getExistingPlaceIds } = require('./sheets');
+const { initializeSheet, getAllLeads, updateLead, appendLeads, getExistingPlaceIds, syncOverdueLeads } = require('./sheets');
 const { scrapeLeads, getUsage } = require('./scraper');
 
 const app = express();
@@ -37,6 +37,10 @@ router.post('/auth/login', (req, res) => {
 
 router.get('/leads', async (req, res) => {
   try {
+    const updatedCount = await syncOverdueLeads();
+    if (updatedCount > 0) {
+      console.log(`[API] Auto-synchronized ${updatedCount} overdue leads.`);
+    }
     const leads = await getAllLeads();
     res.json(leads);
   } catch (error) {

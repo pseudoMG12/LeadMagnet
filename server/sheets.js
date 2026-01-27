@@ -331,11 +331,64 @@ async function appendLeads(leads) {
   });
 }
 
+async function syncOverdueLeads() {
+  try {
+    const auth = await getAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+    
+    const leads = await getAllLeads();
+    const now = new Date();
+    // Use local date parts to construct yyyy-MM-dd for alignment with user's local day
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    
+    const today = new Date(yyyy, now.getMonth(), now.getDate());
+
+    const res = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+    const sheetName = res.data.sheets[0].properties.title;
+
+    const updates = [];
+    leads.forEach((lead, index) => {
+      if (lead.ReminderDate && lead.ReminderDate.includes('-')) {
+        const [ry, rm, rd] = lead.ReminderDate.split('-').map(Number);
+        if (!isNaN(ry) && !isNaN(rm) && !isNaN(rd)) {
+          const rDate = new Date(ry, rm - 1, rd);
+          if (rDate < today) {
+            updates.push({
+              range: `${sheetName}!H${index + 2}`,
+              values: [[todayStr]]
+            });
+          }
+        }
+      }
+    });
+
+    if (updates.length > 0) {
+      console.log(`[SYNC] Rollover ${updates.length} overdue leads to ${todayStr}`);
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+          valueInputOption: 'RAW',
+          data: updates
+        }
+      });
+    }
+    return updates.length;
+  } catch (error) {
+    console.error('Error syncing overdue leads:', error.message);
+    return 0;
+  }
+}
+
 async function getExistingPlaceIds() {
   const leads = await getAllLeads();
   return new Set(leads.map(l => l.PlaceID));
 }
 
 module.exports = {
-  initializeSheet, getAllLeads, updateLead, appendLeads, getExistingPlaceIds
+  initializeSheet, getAllLeads, updateLead, appendLeads, getExistingPlaceIds, syncOverdueLeads
 };
