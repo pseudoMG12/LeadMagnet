@@ -25,7 +25,7 @@ function App() {
   const [anchorDate, setAnchorDate] = useState(startOfToday());
   
   // New States for Views and Filtering
-  const [activeView, setActiveView] = useState('crm'); // 'crm' | 'discovery'
+  const [activeView, setActiveView] = useState('crm'); // 'crm' | 'discovery' | 'bin'
   const [filterColor, setFilterColor] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -121,6 +121,19 @@ function App() {
     }
   };
 
+  const handleArchive = async (placeId, archived) => {
+    const updatedLeads = leads.map(l => 
+      l.PlaceID === placeId ? { ...l, Archived: archived ? 'TRUE' : 'FALSE' } : l
+    );
+    setLeads(updatedLeads);
+    try {
+      await axios.patch(`${API_BASE}/lead/${placeId}`, { archived });
+    } catch (error) {
+       console.error('Archive failed', error);
+       fetchLeads();
+    }
+  };
+
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
@@ -163,11 +176,18 @@ function App() {
       );
     }
 
-    // 1. Filter by View Role (CRM = Edited, Discovery = Unedited)
-    if (activeView === 'crm') {
-      list = list.filter(l => isLeadEdited(l));
+    // 1. Filter by View Role
+    if (activeView === 'bin') {
+      list = list.filter(l => l.Archived === 'TRUE');
     } else {
-      list = list.filter(l => !isLeadEdited(l));
+      // Exclude archived from CRM and Discovery
+      list = list.filter(l => l.Archived !== 'TRUE');
+      
+      if (activeView === 'crm') {
+        list = list.filter(l => isLeadEdited(l));
+      } else {
+        list = list.filter(l => !isLeadEdited(l));
+      }
     }
 
     // 2. Filter by Color
@@ -255,11 +275,11 @@ function App() {
                  <h3 className="text-sm font-medium text-white/40 uppercase tracking-[0.4em] serif !text-white/80">
                    {activeView === 'crm' 
                       ? (activeTab === 'active' ? 'Operational CRM Dataset' : 'Leads Scheduled for Today')
-                      : 'Discovery Data Pool'
+                      : (activeView === 'bin' ? 'Archived Intelligence' : 'Discovery Data Pool')
                    }
                  </h3>
                  <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[9px] text-white/40 tracking-widest uppercase">
-                    {activeView === 'crm' ? 'Autonomous CRM Sync' : 'Raw Intelligence'}
+                    {activeView === 'crm' ? 'Autonomous CRM Sync' : (activeView === 'bin' ? 'Recycle Bin' : 'Raw Intelligence')}
                  </span>
                </div>
             </div>
@@ -272,6 +292,7 @@ function App() {
                       key={lead.PlaceID} 
                       lead={lead} 
                       onUpdate={(updates) => handleInlineUpdate(lead.PlaceID, updates)} 
+                      onArchive={(archived) => handleArchive(lead.PlaceID, archived)}
                       index={idx} 
                     />
                   ))}
@@ -280,6 +301,7 @@ function App() {
                 <SheetView 
                   displayLeads={displayLeads} 
                   handleInlineUpdate={handleInlineUpdate}
+                  handleArchive={handleArchive}
                   sortConfig={sortConfig}
                   setSortConfig={setSortConfig}
                 />

@@ -61,6 +61,12 @@ const Sidebar = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
               active={activeView === 'discovery'} 
               onClick={() => { setActiveView('discovery'); setIsOpen(false); }} 
             />
+            <NavItem 
+              icon={FileText} 
+              label="Bin" 
+              active={activeView === 'bin'} 
+              onClick={() => { setActiveView('bin'); setIsOpen(false); }} 
+            />
             <NavItem icon={Users} label="Collaborators" />
           </nav>
         </div>

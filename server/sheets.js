@@ -38,7 +38,8 @@ const SCHEMA = [
   'Highlighted',         // Q (Technical)
   'Call History',        // R (Technical - JSON)
   'Instagram',           // S (Technical)
-  'Color'                // T (Technical - Card Color)
+  'Color',               // T (Technical - Card Color)
+  'Archived'             // U (Technical - Boolean)
 ];
 
 async function initializeSheet() {
@@ -53,7 +54,7 @@ async function initializeSheet() {
 
     const headerRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:T1`,
+      range: `${sheetName}!A1:U1`,
     });
 
     const currentHeaders = headerRes.data.values ? headerRes.data.values[0] : [];
@@ -63,7 +64,7 @@ async function initializeSheet() {
     if (!headersMatch) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A1:T1`,
+        range: `${sheetName}!A1:U1`,
         valueInputOption: 'RAW',
         resource: { values: [SCHEMA] },
       });
@@ -85,7 +86,7 @@ async function getAllLeads() {
 
   const data = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:T`,
+    range: `${sheetName}!A:U`,
   });
 
   const rows = data.data.values;
@@ -118,6 +119,7 @@ async function getAllLeads() {
       Category: lead.Category || 'General',
       Instagram: lead.Instagram || '',
       Color: lead.Color || '',
+      Archived: lead.Archived || 'FALSE',
       GoogleMapsLink: lead.GoogleMapsLink || (lead.LeadName ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.LeadName + ' ' + (lead.BusinessCity || ''))}` : '')
     };
   });
@@ -278,6 +280,16 @@ async function updateLead(placeId, updates) {
     }));
   }
 
+  // Archived -> Col U (21st)
+  if (updates.archived !== undefined) {
+    updatePromises.push(sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!U${actualRowIndex}`,
+      valueInputOption: 'RAW',
+      resource: { values: [[updates.archived ? 'TRUE' : 'FALSE']] },
+    }));
+  }
+
   // Last Call Date -> Col E (5th)
   updatePromises.push(sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
@@ -318,14 +330,15 @@ async function appendLeads(leads) {
     'FALSE',             // Q (Highlighted)
     '[]',                // R (Call History)
     '',                  // S (Instagram)
-    ''                   // T (Color)
+    '',                  // T (Color)
+    'FALSE'              // U (Archived)
   ]);
 
   if (values.length === 0) return;
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:T`,
+    range: `${sheetName}!A:U`,
     valueInputOption: 'RAW',
     resource: { values },
   });

@@ -6,7 +6,7 @@ import { safeFormat } from '../utils/date';
 
 import LeadModal from './LeadModal';
 
-const LeadCard = ({ lead, onUpdate, index }) => {
+const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
   const [businessName, setBusinessName] = useState(lead.BusinessName);
   const [remarks, setRemarks] = useState(lead.Remarks);
   const [isSaving, setIsSaving] = useState(false);
@@ -40,6 +40,11 @@ const LeadCard = ({ lead, onUpdate, index }) => {
     handleUpdate({ highlighted: !isHighlighted });
   };
 
+  const handleArchiveClick = (e) => {
+    e.stopPropagation();
+    if (onArchive) onArchive(lead.Archived !== 'TRUE');
+  };
+
   return (
     <>
       <div 
@@ -53,18 +58,27 @@ const LeadCard = ({ lead, onUpdate, index }) => {
               <input 
                 className="text-lg serif tracking-tight leading-tight flex-1 bg-transparent border-none focus:outline-none focus:bg-black/5 rounded-lg px-1 transition-all text-black font-medium truncate pointer-events-auto"
                 value={businessName}
-                // Removed stopPropagation to allow modal to open on mobile
+                onClick={(e) => e.stopPropagation()}
                 onChange={(e) => setBusinessName(e.target.value)}
                 onBlur={() => businessName !== lead.BusinessName && handleUpdate({ name: businessName })}
                 title={businessName}
               />
             </div>
-            <button 
-              onClick={toggleHighlight}
-              className={`p-2 rounded-lg transition-all ${isHighlighted ? 'bg-black text-white' : 'bg-black/5 text-black/20 hover:text-black/40'}`}
-            >
-              <Star size={16} fill={isHighlighted ? 'currentColor' : 'none'} strokeWidth={1.5} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={handleArchiveClick}
+                className="p-2 rounded-lg bg-black/5 text-black/20 hover:text-red-500 transition-all"
+                title={lead.Archived === 'TRUE' ? "Restore Lead" : "Move to Bin"}
+              >
+                <X size={16} strokeWidth={1.5} />
+              </button>
+              <button 
+                onClick={toggleHighlight}
+                className={`p-2 rounded-lg transition-all ${isHighlighted ? 'bg-black text-white' : 'bg-black/5 text-black/20 hover:text-black/40'}`}
+              >
+                <Star size={16} fill={isHighlighted ? 'currentColor' : 'none'} strokeWidth={1.5} />
+              </button>
+            </div>
           </div>
 
           {/* Basic Info */}

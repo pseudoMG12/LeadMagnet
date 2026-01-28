@@ -4,7 +4,7 @@ import { safeFormat } from '../utils/date';
 import LeadModal from './LeadModal';
 import { CARD_COLORS } from '../utils/data';
 
-const SheetView = ({ displayLeads, handleInlineUpdate, sortConfig, setSortConfig }) => {
+const SheetView = ({ displayLeads, handleInlineUpdate, handleArchive, sortConfig, setSortConfig }) => {
   const [selectedLead, setSelectedLead] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -102,6 +102,7 @@ const SheetView = ({ displayLeads, handleInlineUpdate, sortConfig, setSortConfig
           isSaving={isSaving}
           onClose={() => setSelectedLead(null)}
           onUpdate={handleUpdate}
+          onArchive={(archived) => handleArchive(selectedLead.lead.PlaceID, archived)}
         />
       )}
     </div>
