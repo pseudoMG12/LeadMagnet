@@ -20,7 +20,7 @@ const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
   }, [lead.BusinessName, lead.Remarks]);
 
   const isHighlighted = lead.Highlighted === 'TRUE';
-  const cardColor = lead.Color || CARD_COLORS[index % CARD_COLORS.length];
+  const cardColor = lead.Color || 'bg-white';
   const isSpecialCategory = ['IT Services', 'Ad Agency'].includes(lead.Category);
 
   const handleUpdate = async (updates) => {
