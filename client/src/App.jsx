@@ -226,7 +226,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white flex overflow-hidden selection:bg-white/10">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} isOpen={isSidebarOpen} setIsOpen={setSidebarOpen} />
+      <Sidebar activeView={activeView} setActiveView={setActiveView} activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setSidebarOpen} />
 
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (

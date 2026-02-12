@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Grid2X2, Users, PieChart, FileText, Settings, Target, ChevronDown, X } from 'lucide-react';
+import { Zap, Grid2X2, Users, PieChart, FileText, Settings, Target, ChevronDown, X, Calendar } from 'lucide-react';
 
 const NavItem = ({ icon: Icon, label, active = false, onClick }) => (
   <button 
@@ -17,7 +17,7 @@ const NavItem = ({ icon: Icon, label, active = false, onClick }) => (
   </button>
 );
 
-const Sidebar = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
+const Sidebar = ({ activeView, setActiveView, activeTab, setActiveTab, isOpen, setIsOpen }) => {
   return (
     <aside className={`
       fixed inset-y-0 left-0 z-50 w-64 bg-black border-r border-white/5 flex flex-col p-4 shadow-2xl transition-transform duration-300
@@ -52,8 +52,14 @@ const Sidebar = ({ activeView, setActiveView, isOpen, setIsOpen }) => {
             <NavItem 
               icon={Target} 
               label="Primary CRM" 
-              active={activeView === 'crm'} 
-              onClick={() => { setActiveView('crm'); setIsOpen(false); }} 
+              active={activeView === 'crm' && activeTab === 'active'} 
+              onClick={() => { setActiveView('crm'); setActiveTab('active'); setIsOpen(false); }} 
+            />
+            <NavItem 
+              icon={Calendar} 
+              label="Today's Schedule" 
+              active={activeView === 'crm' && activeTab === 'today'} 
+              onClick={() => { setActiveView('crm'); setActiveTab('today'); setIsOpen(false); }} 
             />
             <NavItem 
               icon={Grid2X2} 

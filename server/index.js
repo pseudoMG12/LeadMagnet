@@ -85,6 +85,39 @@ router.post('/scrape', async (req, res) => {
   }
 });
 
+router.post('/scrape-link', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    const existingIds = await getExistingPlaceIds();
+    const newLeads = await require('./scraper').scrapeSingleLink(url, existingIds);
+    
+    if (newLeads.length > 0) {
+      await appendLeads(newLeads);
+      return res.json({ 
+        success: true, 
+        count: newLeads.length, 
+        usage: getUsage(),
+        lead: newLeads[0],
+        message: `Successfully added ${newLeads[0].name}` 
+      });
+    } else {
+      return res.json({ 
+        success: false, 
+        count: 0, 
+        usage: getUsage(),
+        message: 'No new lead found or duplicate.' 
+      });
+    }
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mount router at /api for Vercel/Production and / for local convenience if needed
 app.use('/api', router);
 app.use('/', router);
