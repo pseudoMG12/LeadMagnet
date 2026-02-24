@@ -33,6 +33,25 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
     latestData.current = formData;
   }, [formData]);
 
+  // Sync local state when the lead prop changes (e.g. from a background refresh or status update entry)
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      name: lead.BusinessName,
+      phone: lead.Phone,
+      city: lead.City,
+      instagram: lead.Instagram || '',
+      website: lead.Website || '',
+      telecaller: lead.Telecaller || '',
+      callStatus: lead.CallStatus || 'Not Contacted',
+      remarks: lead.Remarks || '',
+      reminderDate: lead.ReminderDate || '',
+      reminderRemark: lead.ReminderRemark || '',
+      color: lead.Color || initialColor || 'bg-white',
+      history: JSON.parse(lead.CallHistory || '[]')
+    }));
+  }, [lead.PlaceID, lead.CallHistory, lead.Remarks, lead.CallStatus]);
+
   // Auto-save logic
   useEffect(() => {
     if (isInitialMount.current) {
@@ -55,23 +74,37 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
   const performSave = async (overrides = {}) => {
     // Merge latest data with any specific overrides (like a new history note)
     const dataToSave = { ...latestData.current, ...overrides };
+    
+    // CRITICAL: Only send fields that actually CHANGED compared to the current prop 'lead'
+    // This prevents race conditions from overwriting unrelated fields with stale modal state.
+    const updates = {};
+    
+    if (dataToSave.name !== lead.BusinessName) updates.name = dataToSave.name;
+    if (dataToSave.phone !== lead.Phone) updates.phone = dataToSave.phone;
+    if (dataToSave.city !== lead.City) updates.city = dataToSave.city;
+    if (dataToSave.instagram !== (lead.Instagram || '')) updates.instagram = dataToSave.instagram;
+    if (dataToSave.website !== (lead.Website || '')) updates.website = dataToSave.website;
+    if (dataToSave.telecaller !== (lead.Telecaller || '')) updates.telecaller = dataToSave.telecaller;
+    if (dataToSave.callStatus !== (lead.CallStatus || 'Not Contacted')) updates.callStatus = dataToSave.callStatus;
+    if (dataToSave.remarks !== (lead.Remarks || '')) updates.remarks = dataToSave.remarks;
+    if (dataToSave.reminderDate !== (lead.ReminderDate || '')) updates.reminderDate = dataToSave.reminderDate;
+    if (dataToSave.reminderRemark !== (lead.ReminderRemark || '')) updates.reminderRemark = dataToSave.reminderRemark;
+    if (dataToSave.color !== (lead.Color || initialColor)) updates.color = dataToSave.color;
+    
+    // For history, only send if we explicitly provided it (meaning a note was added)
+    if (overrides.history) {
+      updates.callHistory = JSON.stringify(overrides.history);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      setSaveStatus('idle');
+      return;
+    }
+
     setSaveStatus('saving');
     
     try {
-      await onUpdate({
-        name: dataToSave.name,
-        phone: dataToSave.phone,
-        city: dataToSave.city,
-        instagram: dataToSave.instagram,
-        website: dataToSave.website,
-        telecaller: dataToSave.telecaller,
-        callStatus: dataToSave.callStatus,
-        remarks: dataToSave.remarks,
-        reminderDate: dataToSave.reminderDate,
-        reminderRemark: dataToSave.reminderRemark,
-        callHistory: JSON.stringify(dataToSave.history),
-        color: dataToSave.color
-      });
+      await onUpdate(updates);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
@@ -80,13 +113,13 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
     }
   };
 
+
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleManualSave = () => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    // Force immediate save of EVERYTHING in the current state
     performSave();
   };
 
@@ -96,7 +129,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
     const newEntry = { date: new Date().toISOString(), note: newNote.trim() };
     const updatedHistory = [...formData.history, newEntry];
     
-    // For local reliability, we update state and force an immediate save for notes
+    // Update local state first
     setFormData(prev => ({ 
       ...prev, 
       history: updatedHistory,
@@ -106,11 +139,13 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
     setNewNote('');
     
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    // Force save specifically with the new history
     performSave({ 
       history: updatedHistory, 
       reminderRemark: newNote.trim() 
     });
   };
+
 
   const getStatusIcon = () => {
     switch (saveStatus) {

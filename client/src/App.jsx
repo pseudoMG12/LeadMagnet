@@ -68,12 +68,12 @@ function App() {
     let finalUpdates = { ...updates };
     
     if (updates.callStatus && updates.callStatus !== lead.CallStatus) {
-      const history = JSON.parse(lead.CallHistory || '[]');
+      const baseHistory = updates.callHistory ? JSON.parse(updates.callHistory) : JSON.parse(lead.CallHistory || '[]');
       const newEntry = { 
         date: new Date().toISOString(), 
         note: `Status updated to: ${updates.callStatus}` 
       };
-      finalUpdates.callHistory = JSON.stringify([...history, newEntry]);
+      finalUpdates.callHistory = JSON.stringify([...baseHistory, newEntry]);
     }
 
     // Map lowercase keys to Uppercase state keys for Optimistic Update

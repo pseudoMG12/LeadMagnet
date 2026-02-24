@@ -129,177 +129,166 @@ async function updateLead(placeId, updates) {
   const auth = await getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const allLeads = await getAllLeads();
-  const rowIndex = allLeads.findIndex(l => l.PlaceID === placeId);
+  // Optimize: Only fetch the column containing Place IDs to find the row
+  const resMeta = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+  });
+  const sheetName = resMeta.data.sheets[0].properties.title;
+
+  const resIds = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!K:K`, // Place ID is Col K
+  });
+
+  const placeIds = resIds.data.values ? resIds.data.values.map(row => row[0]) : [];
+  const rowIndex = placeIds.indexOf(placeId);
   
   if (rowIndex === -1) throw new Error('Lead not found');
 
-  const actualRowIndex = rowIndex + 2;
-  const res = await sheets.spreadsheets.get({
-    spreadsheetId: SPREADSHEET_ID,
-  });
-  const sheetName = res.data.sheets[0].properties.title;
+  const actualRowIndex = rowIndex + 1; // Sheets is 1-indexed, headers at 1, data starts at 2. wait index 0 is first row.
+  // Actually if header is row 1, and index 0 is row 1, index 1 is row 2.
+  // wait, if resIds has headers at [0], then business data starts at [1].
+  // so rowIndex 0 is "Place ID" header.
+  // rowIndex 1 is first lead (Row 2).
+  // So actualRowIndex = rowIndex + 1 is correct for Google Sheets.
 
-  const updatePromises = [];
+  const data = [];
 
-  // Lead Name -> Col A (1st)
+  // Lead Name -> Col A
   if (updates.name !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!A${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.name]] },
-    }));
+      values: [[updates.name]]
+    });
   }
 
-  // Phone Number -> Col B (2nd)
+  // Phone Number -> Col B
   if (updates.phone !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!B${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.phone]] },
-    }));
+      values: [[updates.phone]]
+    });
   }
 
-  // Business / City -> Col D (4th)
-  if (updates.city !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!D${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.city]] },
-    }));
-  }
-
-  // Telecaller -> Col C (3rd)
+  // Telecaller -> Col C
   if (updates.telecaller !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!C${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.telecaller]] },
-    }));
+      values: [[updates.telecaller]]
+    });
   }
 
-  // Call Status -> Col F (6th)
+  // Business / City -> Col D
+  if (updates.city !== undefined) {
+    data.push({
+      range: `${sheetName}!D${actualRowIndex}`,
+      values: [[updates.city]]
+    });
+  }
+
+  // Call Status -> Col F
   if (updates.callStatus !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!F${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.callStatus]] },
-    }));
+      values: [[updates.callStatus]]
+    });
   }
 
-  // Outcome (Remarks) -> Col G (7th)
+  // Outcome (Remarks) -> Col G
   if (updates.remarks !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!G${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.remarks]] },
-    }));
+      values: [[updates.remarks]]
+    });
   }
 
-  // Highlighted -> Col Q (17th)
+  // Highlighted -> Col Q
   if (updates.highlighted !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!Q${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.highlighted ? 'TRUE' : 'FALSE']] },
-    }));
+      values: [[updates.highlighted ? 'TRUE' : 'FALSE']]
+    });
   }
 
-  // Call History -> Col R (18th)
+  // Call History -> Col R
   if (updates.callHistory !== undefined) {
     const history = JSON.parse(updates.callHistory);
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!R${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.callHistory]] },
-    }));
-    // Also update Attempt Count -> Col I (9th)
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+      values: [[updates.callHistory]]
+    });
+    // Also update Attempt Count -> Col I
+    data.push({
       range: `${sheetName}!I${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[history.length.toString()]] },
-    }));
+      values: [[history.length.toString()]]
+    });
   }
 
-  // Next Follow-up Date -> Col H (8th)
+  // Next Follow-up Date -> Col H
   if (updates.reminderDate !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!H${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.reminderDate]] },
-    }));
+      values: [[updates.reminderDate]]
+    });
   }
 
-  // Notes -> Col J (10th)
+  // Notes -> Col J
   if (updates.reminderRemark !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!J${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.reminderRemark]] },
-    }));
+      values: [[updates.reminderRemark]]
+    });
   }
 
-  // Website -> Col M (13th)
+  // Website -> Col M
   if (updates.website !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!M${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.website]] },
-    }));
+      values: [[updates.website]]
+    });
   }
 
-  // Instagram -> Col S (19th)
+  // Instagram -> Col S
   if (updates.instagram !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!S${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.instagram]] },
-    }));
+      values: [[updates.instagram]]
+    });
   }
 
-  // Color -> Col T (20th)
+  // Color -> Col T
   if (updates.color !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!T${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.color]] },
-    }));
+      values: [[updates.color]]
+    });
   }
 
-  // Archived -> Col U (21st)
+  // Archived -> Col U
   if (updates.archived !== undefined) {
-    updatePromises.push(sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+    data.push({
       range: `${sheetName}!U${actualRowIndex}`,
-      valueInputOption: 'RAW',
-      resource: { values: [[updates.archived ? 'TRUE' : 'FALSE']] },
-    }));
+      values: [[updates.archived ? 'TRUE' : 'FALSE']]
+    });
   }
 
-  // Last Call Date -> Col E (5th)
-  updatePromises.push(sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
+  // Last Call Date -> Col E
+  data.push({
     range: `${sheetName}!E${actualRowIndex}`,
-    valueInputOption: 'RAW',
-    resource: { values: [[new Date().toISOString()]] },
-  }));
+    values: [[new Date().toISOString()]]
+  });
 
-  await Promise.all(updatePromises);
+  if (data.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      resource: {
+        valueInputOption: 'RAW',
+        data: data
+      }
+    });
+  }
 }
+
 
 async function appendLeads(leads) {
   const auth = await getAuthClient();
