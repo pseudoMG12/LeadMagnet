@@ -110,7 +110,7 @@ const LeadCard = ({ lead, onUpdate, index }) => {
            </span>
         </div>
         <div className="flex items-center gap-2">
-          <a href={lead.GoogleMapsLink} target="_blank" rel="noreferrer" className="p-2 bg-black/5 rounded-lg hover:bg-black/10 transition-all text-black/40">
+          <a href={lead.GoogleMapsLink} target="_blank" rel="noreferrer" className="p-2 bg-white/5 rounded-full hover:bg-black/10 transition-all text-black/40">
             <ExternalLink size={14} />
           </a>
           {isSaving && <div className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" />}

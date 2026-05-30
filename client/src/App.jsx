@@ -12,7 +12,7 @@ import SheetView from './components/SheetView';
 import Login from './components/Login';
 
 // Utils
-import { API_BASE, DUMMY_DATA, CARD_COLORS } from './utils/data';
+import { API_BASE, PIPELINE_VIEWS, PIPELINE_STAGES, normalizePipelineStage, matchesPipelineStage, isStarredLead } from './utils/data';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -25,10 +25,12 @@ function App() {
   const [anchorDate, setAnchorDate] = useState(startOfToday());
   
   // New States for Views and Filtering
-  const [activeView, setActiveView] = useState('crm'); // 'crm' | 'discovery' | 'bin'
+  const [activeView, setActiveView] = useState('crm'); // 'crm' | 'discovery' | 'bin' | pipeline ids
   const [filterColor, setFilterColor] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
+  const [showAllDates, setShowAllDates] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -51,12 +53,14 @@ function App() {
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
+    setFetchError(null);
     try {
       const res = await axios.get(`${API_BASE}/leads`);
       setLeads(res.data || []);
     } catch (error) {
-      console.error('Fetch failed, showing dummy data');
-      setLeads(DUMMY_DATA);
+      console.error('Fetch failed', error);
+      setFetchError(error.response?.data?.error || 'Could not load leads. Check server and Google Sheets credentials.');
+      setLeads([]);
     } finally {
       setIsLoading(false);
     }
@@ -76,6 +80,18 @@ function App() {
       finalUpdates.callHistory = JSON.stringify([...baseHistory, newEntry]);
     }
 
+    if (updates.pipelineStage !== undefined && updates.pipelineStage !== (lead.PipelineStage || '')) {
+      const baseHistory = finalUpdates.callHistory
+        ? JSON.parse(finalUpdates.callHistory)
+        : JSON.parse(lead.CallHistory || '[]');
+      const label = updates.pipelineStage || 'None';
+      const newEntry = {
+        date: new Date().toISOString(),
+        note: `Pipeline set to: ${label}`,
+      };
+      finalUpdates.callHistory = JSON.stringify([...baseHistory, newEntry]);
+    }
+
     // Map lowercase keys to Uppercase state keys for Optimistic Update
     const FIELD_MAP = {
       name: 'BusinessName',
@@ -90,7 +106,8 @@ function App() {
       reminderRemark: 'ReminderRemark',
       callHistory: 'CallHistory',
       color: 'Color',
-      highlighted: 'Highlighted'
+      highlighted: 'Highlighted',
+      pipelineStage: 'PipelineStage',
     };
 
     const optimisticUpdates = {};
@@ -100,6 +117,9 @@ function App() {
       // Handle special case for Highlighted (boolean to string 'TRUE'/'FALSE')
       if (key === 'highlighted') {
         value = value ? 'TRUE' : 'FALSE';
+      }
+      if (key === 'pipelineStage') {
+        value = normalizePipelineStage(value);
       }
       optimisticUpdates[mappedKey] = value;
     });
@@ -150,8 +170,23 @@ function App() {
        if (h.length > 0) hasHistory = true;
     } catch(e) {}
     
-    return hasRemark || hasColor || isHighlighted || hasReminder || hasHistory;
+    const hasPipeline = lead.PipelineStage && lead.PipelineStage.trim().length > 0;
+    return hasRemark || hasColor || isHighlighted || hasReminder || hasHistory || hasPipeline;
   };
+
+  const isPipelineView = PIPELINE_VIEWS.some((p) => p.id === activeView);
+  const activePipelineMeta = PIPELINE_VIEWS.find((p) => p.id === activeView);
+
+  const pipelineCounts = useMemo(() => {
+    const counts = { starred: 0, under_process: 0, completed: 0 };
+    leads.forEach((l) => {
+      if (l.Archived === 'TRUE') return;
+      if (isStarredLead(l)) counts.starred += 1;
+      if (matchesPipelineStage(l.PipelineStage, PIPELINE_STAGES.UNDER_PROCESS)) counts.under_process += 1;
+      if (matchesPipelineStage(l.PipelineStage, PIPELINE_STAGES.COMPLETED)) counts.completed += 1;
+    });
+    return counts;
+  }, [leads]);
 
   const processedLeads = useMemo(() => {
     let list = [...leads];
@@ -172,20 +207,28 @@ function App() {
         (l.ReminderDate && l.ReminderDate.includes(lowerQuery)) ||
         (l.LastUpdated && l.LastUpdated.includes(lowerQuery)) ||
         (l.Category && l.Category.toLowerCase().includes(lowerQuery)) ||
-        (l.CallHistory && l.CallHistory.toLowerCase().includes(lowerQuery))
+        (l.CallHistory && l.CallHistory.toLowerCase().includes(lowerQuery)) ||
+        (l.PipelineStage && l.PipelineStage.toLowerCase().includes(lowerQuery))
       );
     }
 
     // 1. Filter by View Role
     if (activeView === 'bin') {
       list = list.filter(l => l.Archived === 'TRUE');
+    } else if (isPipelineView && activePipelineMeta) {
+      if (activeView === 'starred') {
+        list = list.filter((l) => isStarredLead(l));
+      } else {
+        list = list.filter(
+          (l) => l.Archived !== 'TRUE' && matchesPipelineStage(l.PipelineStage, activePipelineMeta.stage)
+        );
+      }
     } else {
-      // Exclude archived from CRM and Discovery
       list = list.filter(l => l.Archived !== 'TRUE');
       
       if (activeView === 'crm') {
         list = list.filter(l => isLeadEdited(l));
-      } else {
+      } else if (activeView === 'discovery') {
         list = list.filter(l => !isLeadEdited(l));
       }
     }
@@ -211,14 +254,15 @@ function App() {
     });
 
     return list;
-  }, [leads, sortConfig, activeView, filterColor, searchQuery]);
+  }, [leads, sortConfig, activeView, filterColor, searchQuery, isPipelineView, activePipelineMeta]);
 
-  // Filter leads based on the Selected Date in Timeline (defaults to Today)
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const scheduledLeads = processedLeads.filter(l => l.ReminderDate === selectedDateStr);
-  
-  // Display View Logic
-  const displayLeads = activeTab === 'active' ? processedLeads : scheduledLeads;
+  const useReminderDateFilter =
+    activeView === 'crm' && activeTab === 'today' && !showAllDates && !isPipelineView;
+
+  const displayLeads = useReminderDateFilter
+    ? processedLeads.filter((l) => l.ReminderDate === selectedDateStr)
+    : processedLeads;
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
@@ -226,12 +270,21 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white flex overflow-hidden selection:bg-white/10">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setSidebarOpen} />
+      <Sidebar
+        activeView={activeView}
+        setActiveView={setActiveView}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isOpen={isSidebarOpen}
+        setIsOpen={setSidebarOpen}
+        setShowAllDates={setShowAllDates}
+        pipelineCounts={pipelineCounts}
+      />
 
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-sm animate-in fade-in duration-300"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -239,13 +292,8 @@ function App() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#050505] w-full relative">
         <Header 
           selectedDate={selectedDate}
-          setSelectedDate={setSelectedDate}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
           viewMode={viewMode}
           setViewMode={setViewMode}
-          activeCount={leads.length}
-          todayCount={scheduledLeads.length}
           sortConfig={sortConfig}
           setSortConfig={setSortConfig}
           filterColor={filterColor}
@@ -256,45 +304,60 @@ function App() {
         />
 
         <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-8 md:space-y-12 no-scrollbar lg:custom-scrollbar">
-          <Timeline 
-            dates={dates}
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
-            onDateJump={handleDateJump}
-          />
-
-          {activeView === 'discovery' && (
-            <section className="animate-in fade-in duration-700">
-              <ScraperForm onComplete={fetchLeads} />
-            </section>
+          {fetchError && (
+            <div className="mx-4 md:mx-10 -mb-4 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 text-xs font-medium tracking-wide">
+              {fetchError}
+            </div>
           )}
+          <div className="flex flex-col lg:flex-row gap-4 lg:gap-5 items-stretch">
+            <div className={`min-w-0 ${activeView === 'discovery' ? 'flex-1' : 'w-full'}`}>
+              <Timeline 
+                dates={dates}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                onDateJump={handleDateJump}
+                showAllDates={showAllDates}
+                setShowAllDates={setShowAllDates}
+              />
+            </div>
+            {activeView === 'discovery' && (
+              <div className="w-full lg:w-[280px] xl:w-[300px] shrink-0">
+                <ScraperForm compact onComplete={fetchLeads} />
+              </div>
+            )}
+          </div>
 
-          <section className="space-y-8 pb-20">
+          <section key={`${activeView}-${activeTab}`} className="space-y-8 pb-20 animate-in fade-in duration-500 ease-out">
             <div className="flex items-center justify-between border-b border-white/5 pb-6">
                <div className="flex items-center gap-4">
                  <h3 className="text-sm font-medium text-white/40 uppercase tracking-[0.4em] serif !text-white/80">
-                   {activeView === 'crm' 
-                      ? (activeTab === 'active' ? 'Operational CRM Dataset' : 'Leads Scheduled for Today')
+                   {isPipelineView
+                      ? activePipelineMeta?.label
+                      : activeView === 'crm' 
+                      ? (activeTab === 'active' || showAllDates
+                          ? 'Operational CRM Dataset'
+                          : `Leads for ${format(selectedDate, 'MMM d')}`)
                       : (activeView === 'bin' ? 'Archived Intelligence' : 'Discovery Data Pool')
                    }
                  </h3>
                  <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[9px] text-white/40 tracking-widest uppercase">
-                    {activeView === 'crm' ? 'Autonomous CRM Sync' : (activeView === 'bin' ? 'Recycle Bin' : 'Raw Intelligence')}
+                    {isPipelineView ? 'Pipeline Stage' : activeView === 'crm' ? 'Autonomous CRM Sync' : (activeView === 'bin' ? 'Recycle Bin' : 'Raw Intelligence')}
                  </span>
                </div>
             </div>
 
             {displayLeads.length > 0 ? (
               viewMode === 'cards' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8 animate-in zoom-in-95 duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
                   {displayLeads.map((lead, idx) => (
+                    <div key={lead.PlaceID} className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both" style={{ animationDelay: `${Math.min(idx, 8) * 50}ms` }}>
                     <LeadCard 
-                      key={lead.PlaceID} 
                       lead={lead} 
                       onUpdate={(updates) => handleInlineUpdate(lead.PlaceID, updates)} 
                       onArchive={(archived) => handleArchive(lead.PlaceID, archived)}
                       index={idx} 
                     />
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -309,7 +372,13 @@ function App() {
             ) : (
               <div className="h-80 flex flex-col items-center justify-center bg-white/[0.02] rounded-2xl text-white/20 border border-dashed border-white/10">
                 <p className="text-sm font-medium uppercase tracking-[0.4em]">Partition Empty</p>
-                <p className="text-[10px] mt-2 text-white/10 uppercase tracking-widest font-medium">Awaiting field intelligence logs.</p>
+                <p className="text-[10px] mt-2 text-white/10 uppercase tracking-widest font-medium text-center max-w-xs">
+                  {activeView === 'discovery'
+                    ? 'No raw leads yet — use Harvest or pick All in the tray.'
+                    : isPipelineView
+                    ? `No leads marked as ${activePipelineMeta?.label} — set stage inside a lead card.`
+                    : 'Awaiting field intelligence logs.'}
+                </p>
               </div>
             )}
           </section>

@@ -17,6 +17,19 @@ async function getAuthClient() {
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 
+/** Stable ID when column K (Place ID) is empty — must match getAllLeads() */
+function generateSyntheticPlaceId(leadName, dataRowIndex) {
+  if (leadName && String(leadName).trim()) {
+    const slug = String(leadName)
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .toLowerCase()
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    if (slug) return `manual-${slug}`;
+  }
+  return `manual-${dataRowIndex}`;
+}
+
 // NEW SCHEMA MAPPING TO USER'S PREFERRED COLUMNS (A-J) + TECHNICAL COLUMNS (K-T)
 const SCHEMA = [
   'Lead Name',           // A (Business Name)
@@ -39,8 +52,46 @@ const SCHEMA = [
   'Call History',        // R (Technical - JSON)
   'Instagram',           // S (Technical)
   'Color',               // T (Technical - Card Color)
-  'Archived'             // U (Technical - Boolean)
+  'Archived',            // U (Technical - Boolean)
+  'Pipeline Stage'       // V (Starred | Under Process | Completed)
 ];
+
+const PIPELINE_STAGE_COL = 21; // column V, 0-based index
+
+function normalizePipelineStage(value) {
+  if (!value || typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'starred' || lower === 'started') return 'Starred';
+  if (lower === 'under process' || lower === 'in progress' || lower === 'progress') return 'Under Process';
+  if (lower === 'completed' || lower === 'complete') return 'Completed';
+  const canonical = ['Starred', 'Under Process', 'Completed'];
+  const found = canonical.find((c) => c.toLowerCase() === lower);
+  return found || trimmed;
+}
+
+async function ensureSchemaHeaders(sheets, sheetName) {
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A1:V1`,
+  });
+  const currentHeaders = headerRes.data.values?.[0] || [];
+  const hasPipeline = currentHeaders[PIPELINE_STAGE_COL] === 'Pipeline Stage';
+  const headersMatch =
+    currentHeaders.length >= SCHEMA.length &&
+    SCHEMA.every((h, i) => h === (currentHeaders[i] || ''));
+
+  if (!headersMatch || !hasPipeline) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!A1:V1`,
+      valueInputOption: 'RAW',
+      resource: { values: [SCHEMA] },
+    });
+    console.log('✅ Sheet schema synced (incl. Pipeline Stage column V).');
+  }
+}
 
 async function initializeSheet() {
   try {
@@ -52,24 +103,7 @@ async function initializeSheet() {
     });
     const sheetName = res.data.sheets[0].properties.title;
 
-    const headerRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:U1`,
-    });
-
-    const currentHeaders = headerRes.data.values ? headerRes.data.values[0] : [];
-    const headersMatch = currentHeaders.length === SCHEMA.length && 
-                         SCHEMA.every((h, i) => h === currentHeaders[i]);
-
-    if (!headersMatch) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A1:U1`,
-        valueInputOption: 'RAW',
-        resource: { values: [SCHEMA] },
-      });
-      console.log('✅ Sheet schema updated to Lead Contact Layout.');
-    }
+    await ensureSchemaHeaders(sheets, sheetName);
   } catch (error) {
     console.error('Error initializing sheet:', error.message);
   }
@@ -83,10 +117,11 @@ async function getAllLeads() {
     spreadsheetId: SPREADSHEET_ID,
   });
   const sheetName = res.data.sheets[0].properties.title;
+  await ensureSchemaHeaders(sheets, sheetName);
 
   const data = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:U`,
+    range: `${sheetName}!A:V`,
   });
 
   const rows = data.data.values;
@@ -100,8 +135,9 @@ async function getAllLeads() {
       lead[key] = row[i] || '';
     });
     
-    // Generate fallback PlaceID for manually-added leads
-    const placeId = lead.PlaceID || `manual-${lead.LeadName?.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() || index}`;
+    const placeId = (lead.PlaceID && String(lead.PlaceID).trim())
+      ? lead.PlaceID
+      : generateSyntheticPlaceId(lead.LeadName, index);
     
     // Normalize keys for legacy app usage
     return {
@@ -120,39 +156,66 @@ async function getAllLeads() {
       Instagram: lead.Instagram || '',
       Color: lead.Color || '',
       Archived: lead.Archived || 'FALSE',
+      PipelineStage: normalizePipelineStage(lead.PipelineStage || row[PIPELINE_STAGE_COL] || ''),
       GoogleMapsLink: lead.GoogleMapsLink || (lead.LeadName ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.LeadName + ' ' + (lead.BusinessCity || ''))}` : '')
     };
   });
+}
+
+async function findLeadRowIndex(sheets, sheetName, placeId) {
+  const [resIds, resNames] = await Promise.all([
+    sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!K:K`,
+    }),
+    sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!A:A`,
+    }),
+  ]);
+
+  const placeIds = resIds.data.values ? resIds.data.values.map(row => row[0] || '') : [];
+  let rowIndex = placeIds.indexOf(placeId);
+
+  if (rowIndex === -1) {
+    const names = resNames.data.values ? resNames.data.values.map(row => row[0] || '') : [];
+    for (let i = 1; i < names.length; i++) {
+      const synthetic = generateSyntheticPlaceId(names[i], i - 1);
+      if (synthetic === placeId) {
+        rowIndex = i;
+        break;
+      }
+    }
+  }
+
+  return { rowIndex, placeIds };
 }
 
 async function updateLead(placeId, updates) {
   const auth = await getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // Optimize: Only fetch the column containing Place IDs to find the row
   const resMeta = await sheets.spreadsheets.get({
     spreadsheetId: SPREADSHEET_ID,
   });
   const sheetName = resMeta.data.sheets[0].properties.title;
 
-  const resIds = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!K:K`, // Place ID is Col K
-  });
+  const { rowIndex, placeIds } = await findLeadRowIndex(sheets, sheetName, placeId);
 
-  const placeIds = resIds.data.values ? resIds.data.values.map(row => row[0]) : [];
-  const rowIndex = placeIds.indexOf(placeId);
-  
   if (rowIndex === -1) throw new Error('Lead not found');
 
-  const actualRowIndex = rowIndex + 1; // Sheets is 1-indexed, headers at 1, data starts at 2. wait index 0 is first row.
-  // Actually if header is row 1, and index 0 is row 1, index 1 is row 2.
-  // wait, if resIds has headers at [0], then business data starts at [1].
-  // so rowIndex 0 is "Place ID" header.
-  // rowIndex 1 is first lead (Row 2).
-  // So actualRowIndex = rowIndex + 1 is correct for Google Sheets.
+  const actualRowIndex = rowIndex + 1;
 
   const data = [];
+
+  // Backfill Place ID in column K when it was empty (synthetic ID used in the app)
+  const existingPlaceId = placeIds[rowIndex] || '';
+  if (!existingPlaceId.trim()) {
+    data.push({
+      range: `${sheetName}!K${actualRowIndex}`,
+      values: [[placeId]],
+    });
+  }
 
   // Lead Name -> Col A
   if (updates.name !== undefined) {
@@ -272,6 +335,14 @@ async function updateLead(placeId, updates) {
     });
   }
 
+  // Pipeline Stage -> Col V
+  if (updates.pipelineStage !== undefined) {
+    data.push({
+      range: `${sheetName}!V${actualRowIndex}`,
+      values: [[normalizePipelineStage(updates.pipelineStage)]]
+    });
+  }
+
   // Last Call Date -> Col E
   data.push({
     range: `${sheetName}!E${actualRowIndex}`,
@@ -320,14 +391,15 @@ async function appendLeads(leads) {
     '[]',                // R (Call History)
     '',                  // S (Instagram)
     '',                  // T (Color)
-    'FALSE'              // U (Archived)
+    'FALSE',             // U (Archived)
+    ''                   // V (Pipeline Stage)
   ]);
 
   if (values.length === 0) return;
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:U`,
+    range: `${sheetName}!A:V`,
     valueInputOption: 'RAW',
     resource: { values },
   });

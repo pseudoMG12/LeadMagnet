@@ -14,118 +14,145 @@ const PRICING = {
   PLACE_DETAILS: 0.025
 };
 
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+};
+
 async function resolveUrl(url) {
   if (!url) return '';
   try {
-    const response = await axios.head(url, { maxRedirects: 0, validateStatus: (status) => status >= 300 && status < 400 });
-    return response.headers.location || url;
+    const response = await axios.get(url, {
+      maxRedirects: 10,
+      timeout: 15000,
+      validateStatus: () => true,
+      headers: BROWSER_HEADERS,
+    });
+    return response.request?.res?.responseUrl || response.config?.url || url;
   } catch (error) {
-    // If it's a direct link or other error, just return the url
-    return url;
+    return error.response?.headers?.location || url;
   }
+}
+
+function extractPlaceIdFromUrl(url) {
+  if (!url) return null;
+  const patterns = [
+    /[?&]query_place_id=(ChIJ[\w-]+)/i,
+    /place_id[=:](ChIJ[\w-]+)/i,
+    /!1s(ChIJ[\w-]+)/,
+    /(ChIJ[\w-]{20,})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function extractNameFromMapsUrl(url) {
+  if (!url || !url.includes('/place/')) return null;
+  try {
+    const part = url.split('/place/')[1].split('/')[0];
+    return decodeURIComponent(part.replace(/\+/g, ' '));
+  } catch {
+    return null;
+  }
+}
+
+function assertMapsApiOk(data, context) {
+  const status = data?.status;
+  if (status === 'OK' || status === 'ZERO_RESULTS') return;
+  const message = data?.error_message || status || 'Unknown Maps API error';
+  const err = new Error(`${context}: ${message}`);
+  err.mapsStatus = status;
+  throw err;
+}
+
+async function fetchPlaceDetails(placeId) {
+  const detailsRes = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
+    params: {
+      place_id: placeId,
+      fields: 'name,formatted_phone_number,website,url,place_id,reviews',
+      key: GOOGLE_MAPS_API_KEY,
+    },
+  });
+  currentUsageUSD += PRICING.PLACE_DETAILS;
+  assertMapsApiOk(detailsRes.data, 'Place Details');
+  return detailsRes.data.result;
+}
+
+function leadFromPlaceDetails(details) {
+  return {
+    placeId: details.place_id,
+    name: details.name,
+    city: 'Manual Import',
+    category: 'Manual Import',
+    phone: details.formatted_phone_number || '',
+    website: details.website || '',
+    websiteStatus: 'unknown',
+    mapsUrl: details.url,
+    retrievedDate: new Date().toISOString(),
+  };
 }
 
 async function scrapeSingleLink(urlOrQuery, existingPlaceIds) {
   const newLead = [];
-  
+
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error('GOOGLE_MAPS_API_KEY is not configured on the server.');
+  }
+
   if (currentUsageUSD >= USAGE_LIMIT_USD) {
-      console.log('Usage limit reached. Stopping scraper.');
-      return [];
+    console.log('Usage limit reached. Stopping scraper.');
+    return [];
   }
 
   console.log(`Processing single link/query: ${urlOrQuery}`);
 
-  try {
-    let query = urlOrQuery;
+  let resolvedUrl = urlOrQuery;
+  if (/^https?:\/\//i.test(urlOrQuery)) {
+    resolvedUrl = await resolveUrl(urlOrQuery);
+    console.log(`Resolved URL: ${resolvedUrl}`);
+  }
 
-    // simplistic attempt to extract name from URL if it is a long google maps url
-    // https://www.google.com/maps/place/Business+Name/@...
-    if (urlOrQuery.includes('google.com/maps/place/')) {
-       try {
-         const parts = urlOrQuery.split('/place/')[1].split('/')[0];
-         query = decodeURIComponent(parts.replace(/\+/g, ' '));
-         console.log(`Extracted name from URL: ${query}`);
-       } catch (e) {
-         // fallback to using the whole url as query
-       }
+  let placeId = extractPlaceIdFromUrl(resolvedUrl);
+  let query = extractNameFromMapsUrl(resolvedUrl) || urlOrQuery;
+
+  if (placeId) {
+    if (existingPlaceIds.has(placeId)) {
+      console.log(`Duplicate found (place_id): ${placeId}`);
+      return [];
+    }
+    const details = await fetchPlaceDetails(placeId);
+    if (details) {
+      const lead = leadFromPlaceDetails(details);
+      lead.websiteStatus = await classifyWebsite(details.website);
+      newLead.push(lead);
+    }
+    return newLead;
+  }
+
+  const searchRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+    params: { query, key: GOOGLE_MAPS_API_KEY },
+  });
+  currentUsageUSD += PRICING.TEXT_SEARCH;
+  assertMapsApiOk(searchRes.data, 'Text Search');
+
+  const results = searchRes.data.results || [];
+
+  if (results.length > 0) {
+    const place = results[0];
+
+    if (existingPlaceIds.has(place.place_id)) {
+      console.log(`Duplicate found: ${place.name}`);
+      return [];
     }
 
-    // 1. Text Search
-    const searchParams = {
-      query: query, // Google Text Search is smart enough to handle URLs often, or the extracted name
-      key: GOOGLE_MAPS_API_KEY
-    };
-
-    const searchRes = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
-      params: searchParams
-    });
-    currentUsageUSD += PRICING.TEXT_SEARCH;
-
-    const results = searchRes.data.results || [];
-    
-    // We only take the first result for a specific link/query
-    if (results.length > 0) {
-      const place = results[0];
-      
-      if (existingPlaceIds.has(place.place_id)) {
-        console.log(`Duplicate found: ${place.name}`);
-        return []; // Duplicate
-      }
-
-      // 2. Place Details
-      const detailsRes = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
-        params: {
-          place_id: place.place_id,
-          fields: 'name,formatted_phone_number,website,url,place_id,reviews',
-          key: GOOGLE_MAPS_API_KEY
-        }
-      });
-      currentUsageUSD += PRICING.PLACE_DETAILS;
-
-      const details = detailsRes.data.result;
-      if (details) {
-         // Similar validation logic as bulk scrape
-         // Skip if no reviews or too old? user said "autmaticall fetch info", maybe we should be less strict for single add?
-         // User "check before duplication" is the main constraint.
-         // Let's keep the website check but maybe relax the review constraint for manual entry? 
-         // For now, I'll keep the same logic to ensure quality, but if user pastes a valid link they expect it to appear.
-         // Let's relax the review check for single link addition.
-         
-         const websiteStatus = await classifyWebsite(details.website);
-         if (websiteStatus !== 'working') {
-             newLead.push({
-              placeId: details.place_id,
-              name: details.name,
-              city: 'Manual Import', // Or try to extract from address
-              category: 'Manual Import',
-              phone: details.formatted_phone_number || '',
-              website: details.website || '',
-              websiteStatus,
-              mapsUrl: details.url,
-              retrievedDate: new Date().toISOString()
-            });
-         } else {
-             console.log(`Skipping manual import ${details.name}: Website works.`);
-             // If user manually adds it, maybe they WANT it even if website works?
-             // "add a field i discovery to add a gooogle map link, and it shoudl autmaticall fetch info form that"
-             // Usually manual overrides automatic filtering. I will include it even if website works.
-             newLead.push({
-              placeId: details.place_id,
-              name: details.name,
-              city: 'Manual Import',
-              category: 'Manual Import',
-              phone: details.formatted_phone_number || '',
-              website: details.website || '',
-              websiteStatus, // Record it works
-              mapsUrl: details.url,
-              retrievedDate: new Date().toISOString()
-            });
-         }
-      }
+    const details = await fetchPlaceDetails(place.place_id);
+    if (details) {
+      const lead = leadFromPlaceDetails(details);
+      lead.websiteStatus = await classifyWebsite(details.website);
+      newLead.push(lead);
     }
-
-  } catch (error) {
-    console.error(`Error searching for single link:`, error.message);
   }
 
   return newLead;
@@ -211,6 +238,7 @@ async function scrapeLeads(city, categories, existingPlaceIds) {
           params: searchParams
         });
         currentUsageUSD += PRICING.TEXT_SEARCH;
+        assertMapsApiOk(searchRes.data, `Text Search (${query})`);
 
         const results = searchRes.data.results || [];
         nextPageToken = searchRes.data.next_page_token;
@@ -221,16 +249,7 @@ async function scrapeLeads(city, categories, existingPlaceIds) {
           if (existingPlaceIds.has(place.place_id)) continue;
 
           // 2. Place Details
-          const detailsRes = await axios.get('https://maps.googleapis.com/maps/api/place/details/json', {
-            params: {
-              place_id: place.place_id,
-              fields: 'name,formatted_phone_number,website,url,place_id,reviews',
-              key: GOOGLE_MAPS_API_KEY
-            }
-          });
-          currentUsageUSD += PRICING.PLACE_DETAILS;
-
-          const details = detailsRes.data.result;
+          const details = await fetchPlaceDetails(place.place_id);
           if (!details) continue;
 
           // Skip if no reviews

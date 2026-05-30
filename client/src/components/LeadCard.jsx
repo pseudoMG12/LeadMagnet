@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, MapPin, Globe, Star, ExternalLink, X } from 'lucide-react';
+import { Phone, MapPin, Globe, Star, Trash2 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
-import { API_BASE, CARD_COLORS } from '../utils/data';
+import { PIPELINE_STAGES, isStarredLead } from '../utils/data';
 import { safeFormat } from '../utils/date';
 
 import LeadModal from './LeadModal';
@@ -17,11 +17,10 @@ const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
   useEffect(() => {
     setBusinessName(lead.BusinessName);
     setRemarks(lead.Remarks);
-  }, [lead.BusinessName, lead.Remarks]);
+  }, [lead.BusinessName, lead.Remarks, lead.PipelineStage]);
 
-  const isHighlighted = lead.Highlighted === 'TRUE';
+  const isStarred = isStarredLead(lead);
   const cardColor = lead.Color || 'bg-white';
-  const isSpecialCategory = ['IT Services', 'Ad Agency'].includes(lead.Category);
 
   const handleUpdate = async (updates) => {
     setIsSaving(true);
@@ -35,9 +34,16 @@ const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
     }
   };
 
-  const toggleHighlight = (e) => {
+  const toggleStarred = (e) => {
     e.stopPropagation();
-    handleUpdate({ highlighted: !isHighlighted });
+    if (isStarred) {
+      handleUpdate({
+        pipelineStage: '',
+        ...(lead.Highlighted === 'TRUE' ? { highlighted: false } : {}),
+      });
+    } else {
+      handleUpdate({ pipelineStage: PIPELINE_STAGES.STARRED });
+    }
   };
 
   const handleArchiveClick = (e) => {
@@ -49,9 +55,10 @@ const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
     <>
       <div 
         onClick={() => setIsExpanded(true)}
-        className={`${cardColor} rounded-2xl p-1.5 transition-all duration-500 text-black shadow-[0_15px_40px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.12)] border border-white/20 relative overflow-hidden group cursor-pointer flex flex-col`}
+        className={`${cardColor} rounded-2xl p-1.5 transition-shadow duration-300 text-black shadow-[0_15px_40px_rgba(0,0,0,0.08)] hover:shadow-[0_18px_44px_rgba(0,0,0,0.1)] border border-white/20 relative overflow-hidden group cursor-pointer flex flex-col`}
+        style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
       >
-        <div className="flex-1 bg-gradient-to-b from-white/90 via-white/70 to-white/50 backdrop-blur-sm rounded-2xl shadow-2xl p-4 flex flex-col gap-4">
+        <div className="flex-1 bg-gradient-to-b from-white/90 via-white/70 to-white/50 backdrop-blur-sm rounded-2xl shadow-2xl p-4 flex flex-col gap-4 transition-all duration-500">
           {/* Header */}
           <div className="flex justify-between items-start gap-4">
             <div className="flex-1 flex items-center gap-2 min-w-0">
@@ -67,16 +74,17 @@ const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
             <div className="flex items-center gap-1">
               <button 
                 onClick={handleArchiveClick}
-                className="p-2 rounded-lg bg-black/5 text-black/20 hover:text-red-500 transition-all"
-                title={lead.Archived === 'TRUE' ? "Restore Lead" : "Move to Bin"}
+                className="p-2 rounded-lg bg-black/[0.07] text-black hover:bg-black/15 transition-all duration-300 ease-out hover:scale-105 active:scale-95"
+                title={lead.Archived === 'TRUE' ? 'Restore Lead' : 'Move to Bin'}
               >
-                <X size={16} strokeWidth={1.5} />
+                <Trash2 size={15} strokeWidth={2} className="text-black" />
               </button>
               <button 
-                onClick={toggleHighlight}
-                className={`p-2 rounded-lg transition-all ${isHighlighted ? 'bg-black text-white' : 'bg-black/5 text-black/20 hover:text-black/40'}`}
+                onClick={toggleStarred}
+                className={`p-2 rounded-lg transition-all duration-300 ease-out ${isStarred ? 'bg-black text-white scale-105' : 'bg-black/5 text-black/20 hover:text-black/40 hover:scale-105'}`}
+                title={isStarred ? 'Remove from Starred' : 'Add to Starred'}
               >
-                <Star size={16} fill={isHighlighted ? 'currentColor' : 'none'} strokeWidth={1.5} />
+                <Star size={16} fill={isStarred ? 'currentColor' : 'none'} strokeWidth={1.5} />
               </button>
             </div>
           </div>
@@ -89,11 +97,23 @@ const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
                 <span>{lead.Phone}</span>
               </div>
             )}
-            <div className="flex items-center gap-2 text-xs text-black/80 font-semibold overflow-hidden">
-              <Globe size={12} className="opacity-60" />
-              <a href={lead.Website} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="truncate flex-1 font-semibold hover:underline">
-                 {lead.Website || 'Local Directory'}
-              </a>
+            <div className="flex items-center gap-2 text-xs text-black/80 font-semibold overflow-hidden min-w-0">
+              <Globe size={12} className="opacity-60 shrink-0" />
+              {lead.Website ? (
+                <a
+                  href={lead.Website}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="truncate font-semibold text-black/80 hover:text-black hover:underline underline-offset-2 transition-colors duration-200 w-fit max-w-full"
+                >
+                  {lead.Website}
+                </a>
+              ) : (
+                <span className="truncate text-black/35 cursor-default select-none pointer-events-none">
+                  Local Directory
+                </span>
+              )}
             </div>
           </div>
 
@@ -148,17 +168,19 @@ const LeadCard = ({ lead, onUpdate, onArchive, index }) => {
                  Sync: {safeFormat(lead.LastUpdated, 'dd MMM')}
                </span>
             </div>
-            <a 
-              href={lead.GoogleMapsLink} 
-              target="_blank" 
-              rel="noreferrer" 
-              onClick={(e) => e.stopPropagation()} 
-              className="p-2 bg-black/5 rounded-lg hover:bg-black/10 transition-all text-black/60 flex items-center gap-2 group border border-black/5"
-              title="View on Google Maps"
-            >
-              <MapPin size={12} className="group-hover:text-red-600 transition-colors" />
-              <span className="text-[9px] font-bold uppercase tracking-wide">Maps</span>
-            </a>
+            <div className="flex items-center gap-1.5 text-black/40">
+              <MapPin size={12} className="shrink-0" />
+              <a
+                href={lead.GoogleMapsLink}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-[9px] font-bold uppercase tracking-wide text-black/60 hover:text-black hover:underline underline-offset-2 transition-colors duration-200"
+                title="View on Google Maps"
+              >
+                Maps
+              </a>
+            </div>
           </div>
         </div>
       </div>

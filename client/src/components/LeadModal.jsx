@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Phone, Globe, Star, ExternalLink, X, MapPin, Instagram, Link as LinkIcon, AlertCircle, Calendar, Activity, Check, Cloud } from 'lucide-react';
+import { Phone, Globe, ExternalLink, X, MapPin, Instagram, Calendar, Activity, Check, Cloud } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { safeFormat } from '../utils/date';
 
-import { CARD_COLORS } from '../utils/data';
+import { CARD_COLORS, PIPELINE_STAGES, matchesPipelineStage } from '../utils/data';
+
+/** Starred is set from the small card star only — not in the modal */
+const MODAL_PIPELINE_OPTIONS = [
+  { value: '', label: 'None' },
+  { value: PIPELINE_STAGES.UNDER_PROCESS, label: 'Under Process' },
+  { value: PIPELINE_STAGES.COMPLETED, label: 'Completed' },
+];
 
 const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor }) => {
   // Use a local state object for all fields to avoid stale closure issues during auto-save
@@ -19,6 +26,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
     reminderDate: lead.ReminderDate || '',
     reminderRemark: lead.ReminderRemark || '',
     color: lead.Color || initialColor || 'bg-white',
+    pipelineStage: lead.PipelineStage || '',
     history: JSON.parse(lead.CallHistory || '[]')
   });
 
@@ -48,9 +56,10 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
       reminderDate: lead.ReminderDate || '',
       reminderRemark: lead.ReminderRemark || '',
       color: lead.Color || initialColor || 'bg-white',
+      pipelineStage: lead.PipelineStage || '',
       history: JSON.parse(lead.CallHistory || '[]')
     }));
-  }, [lead.PlaceID, lead.CallHistory, lead.Remarks, lead.CallStatus]);
+  }, [lead.PlaceID, lead.CallHistory, lead.Remarks, lead.CallStatus, lead.PipelineStage]);
 
   // Auto-save logic
   useEffect(() => {
@@ -90,6 +99,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
     if (dataToSave.reminderDate !== (lead.ReminderDate || '')) updates.reminderDate = dataToSave.reminderDate;
     if (dataToSave.reminderRemark !== (lead.ReminderRemark || '')) updates.reminderRemark = dataToSave.reminderRemark;
     if (dataToSave.color !== (lead.Color || initialColor)) updates.color = dataToSave.color;
+    if (dataToSave.pipelineStage !== (lead.PipelineStage || '')) updates.pipelineStage = dataToSave.pipelineStage;
     
     // For history, only send if we explicitly provided it (meaning a note was added)
     if (overrides.history) {
@@ -116,6 +126,22 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
 
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const setPipelineStage = async (stage) => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    const prev = formData.pipelineStage;
+    updateField('pipelineStage', stage);
+    if (stage === prev) return;
+    setSaveStatus('saving');
+    try {
+      await onUpdate({ pipelineStage: stage });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      setSaveStatus('idle');
+      console.error('Pipeline save failed', error);
+    }
   };
 
   const handleManualSave = () => {
@@ -159,7 +185,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 md:bg-black/80 backdrop-blur-md p-0 md:p-4 animate-in fade-in duration-300" onClick={onClose}>
       <div 
-        className={`${formData.color} w-full h-full md:h-[90vh] md:max-w-[75rem] md:rounded-3xl p-2 md:p-3 relative shadow-2xl border flex flex-col lg:flex-row gap-3 transition-all duration-300 overflow-y-auto md:overflow-hidden`}
+        className={`${formData.color} w-full h-full md:h-[90vh] md:max-w-[75rem] md:rounded-3xl p-2 md:p-3 relative shadow-2xl border flex flex-col lg:flex-row gap-3 transition-all duration-500 ease-out overflow-y-auto lg:overflow-hidden animate-in zoom-in-95 fade-in duration-300`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
@@ -170,121 +196,139 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
           <X size={20} strokeWidth={2} />
         </button>
 
-        {/* --- LEFT PANEL: INFO & INTELLIGENCE --- */}
-         <div className="flex-none lg:flex-[2] bg-gradient-to-b from-white via-white/80 to-white/60 rounded-2xl md:rounded-3xl p-4 md:p-6 flex flex-col gap-5 shadow-2xl md:overflow-y-auto custom-scrollbar-black text-black min-h-fit">
+        {/* --- LEFT PANEL --- */}
+         <div className="flex flex-col flex-1 min-h-0 lg:flex-[2] lg:h-full bg-gradient-to-b from-white via-white/85 to-white/70 rounded-2xl md:rounded-3xl p-4 md:p-5 shadow-2xl text-black overflow-y-auto lg:overflow-hidden">
            
-           {/* Header Section */}
-           <div className="space-y-3">
-               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
+           <div className="space-y-3 shrink-0">
+               <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Business Entity</span>
                     {getStatusIcon()}
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 md:mr-10">
+                  <div className="flex items-center gap-1.5 md:mr-10 shrink-0">
                     {CARD_COLORS.map((c) => (
                        <button 
                          key={c}
                          onClick={(e) => { e.stopPropagation(); updateField('color', c); }}
-                         className={`w-4 h-4 md:w-3.5 md:h-3.5 rounded-full border border-black/10 transition-all ${c} ${formData.color === c ? 'scale-125 ring-2 ring-black/30 shadow-sm' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                         className={`w-4 h-4 rounded-full border border-black/10 transition-all ${c} ${formData.color === c ? 'ring-2 ring-black/30 scale-110' : 'opacity-70 hover:opacity-100'}`}
                          title="Set Color"
                        />
                      ))}
                   </div>
                </div>
                <input 
-                 className="w-full text-2xl md:text-4xl serif tracking-tight leading-tight bg-transparent border-none focus:outline-none placeholder:text-black/10 -ml-1 py-1 text-black font-medium"
+                 className="w-full text-xl md:text-2xl serif tracking-tight leading-snug bg-transparent border-none focus:outline-none placeholder:text-black/15 text-black font-medium"
                  value={formData.name}
                  onChange={(e) => updateField('name', e.target.value)}
                  placeholder="Business Name"
                />
                
-               {/* Quick Pills */}
+               <div className="space-y-1.5">
+                 <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Pipeline Stage</span>
+                 <div className="flex flex-wrap gap-1.5">
+                   {MODAL_PIPELINE_OPTIONS.filter((opt) => {
+                     if (opt.value === '' && matchesPipelineStage(formData.pipelineStage, PIPELINE_STAGES.STARRED)) {
+                       return false;
+                     }
+                     return true;
+                   }).map((opt) => {
+                     const isActive =
+                       opt.value === ''
+                         ? !formData.pipelineStage?.trim()
+                         : formData.pipelineStage === opt.value;
+                     return (
+                     <button
+                       key={opt.value || 'none'}
+                       type="button"
+                       onClick={(e) => { e.stopPropagation(); setPipelineStage(opt.value); }}
+                       className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border transition-all duration-200 ${
+                         isActive
+                           ? 'bg-black text-white border-black shadow-sm'
+                           : 'bg-white/70 text-black/55 border-black/10 hover:border-black/20 hover:bg-white'
+                       }`}
+                     >
+                       {opt.label}
+                     </button>
+                   );})}
+                 </div>
+               </div>
+
                <div className="flex flex-wrap gap-2">
-                 <a href={lead.GoogleMapsLink} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-black/5 hover:bg-black/10 rounded-full text-black/60 transition-all text-[10px] font-bold uppercase tracking-wide">
-                    <MapPin size={10} className="opacity-50" />
-                    <span>Maps</span>
-                 </a>
+                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/5 rounded-full text-[10px] font-bold uppercase tracking-wide text-black/50">
+                    <MapPin size={11} className="opacity-50" />
+                    <a href={lead.GoogleMapsLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-black/70 hover:text-black hover:underline">Maps</a>
+                 </span>
                  {formData.website && (
-                   <a href={formData.website} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1 bg-black/5 hover:bg-black/10 rounded-full text-black/60 transition-all text-[10px] font-bold uppercase tracking-wide">
-                     <Globe size={10} className="opacity-50" />
-                     <span>Website</span>
-                   </a>
+                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/5 rounded-full text-[10px] font-bold uppercase tracking-wide text-black/50">
+                     <Globe size={11} className="opacity-50" />
+                     <a href={formData.website} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-black/70 hover:text-black hover:underline">Website</a>
+                   </span>
                  )}
                </div>
-           </div>
 
-           {/* Cards Grid */}
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {/* Card 1: Location */}
-              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
-                  <div className="flex items-center gap-2 text-black/40 mb-1">
-                      <MapPin size={12} />
-                      <span className="text-[9px] font-bold uppercase tracking-wider">Location</span>
+           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              <div className="bg-black/[0.04] rounded-xl px-3 py-2 group hover:bg-black/[0.07] transition-colors">
+                  <div className="flex items-center gap-1.5 text-black/40 mb-0.5">
+                      <MapPin size={11} />
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Location</span>
                   </div>
                   <input 
-                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    className="w-full bg-transparent border-none p-0 text-[13px] leading-tight font-semibold text-black focus:outline-none placeholder:text-black/25"
                     placeholder="Add City..."
                     value={formData.city}
                     onChange={(e) => updateField('city', e.target.value)}
                   />
               </div>
 
-              {/* Card 2: Contact */}
-              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
-                  <div className="flex items-center gap-2 text-black/40 mb-1">
-                      <Phone size={12} />
-                      <span className="text-[9px] font-bold uppercase tracking-wider">Contact</span>
+              <div className="bg-black/[0.04] rounded-xl px-3 py-2 group hover:bg-black/[0.07] transition-colors">
+                  <div className="flex items-center gap-1.5 text-black/40 mb-0.5">
+                      <Phone size={11} />
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Contact</span>
                   </div>
                   <input 
-                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    className="w-full bg-transparent border-none p-0 text-[13px] leading-tight font-semibold text-black focus:outline-none placeholder:text-black/25"
                     placeholder="Add Phone..."
                     value={formData.phone}
                     onChange={(e) => updateField('phone', e.target.value)}
                   />
               </div>
 
-              {/* Card 3: Instagram */}
-              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors relative">
-                  <div className="flex items-center justify-between text-black/40 mb-1">
-                      <div className="flex items-center gap-2">
-                        <Instagram size={12} />
-                        <span className="text-[9px] font-bold uppercase tracking-wider">Instagram</span>
-                      </div>
-                      <span className="text-[14px] opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+              <div className="bg-black/[0.04] rounded-xl px-3 py-2 group hover:bg-black/[0.07] transition-colors">
+                  <div className="flex items-center gap-1.5 text-black/40 mb-0.5">
+                        <Instagram size={11} />
+                        <span className="text-[8px] font-bold uppercase tracking-wider">Instagram</span>
                   </div>
                   <input 
-                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    className="w-full bg-transparent border-none p-0 text-[13px] leading-tight font-semibold text-black focus:outline-none placeholder:text-black/25"
                     placeholder="@username"
                     value={formData.instagram}
                     onChange={(e) => updateField('instagram', e.target.value)}
                   />
               </div>
 
-               {/* Card 4: Website */}
-               <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors relative">
-                  <div className="flex items-center justify-between text-black/40 mb-1">
-                      <div className="flex items-center gap-2">
-                         <Globe size={12} />
-                         <span className="text-[9px] font-bold uppercase tracking-wider">Website</span>
+               <div className="bg-black/[0.04] rounded-xl px-3 py-2 group hover:bg-black/[0.07] transition-colors relative">
+                  <div className="flex items-center justify-between text-black/40 mb-0.5">
+                      <div className="flex items-center gap-1.5">
+                         <Globe size={11} />
+                         <span className="text-[8px] font-bold uppercase tracking-wider">Website</span>
                       </div>
-                      {formData.website && <a href={formData.website} target="_blank" rel="noreferrer" className="md:absolute top-4 right-4 p-1 hover:bg-black/10 rounded-full"><ExternalLink size={12} /></a>}
+                      {formData.website && <a href={formData.website} target="_blank" rel="noreferrer" className="p-0.5 hover:bg-black/10 rounded-full"><ExternalLink size={11} /></a>}
                   </div>
                   <input 
-                    className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                    className="w-full bg-transparent border-none p-0 text-[13px] leading-tight font-semibold text-black focus:outline-none placeholder:text-black/25"
                     placeholder="https://..."
                     value={formData.website}
                     onChange={(e) => updateField('website', e.target.value)}
                   />
               </div>
 
-              {/* Card 5: Status */}
-              <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
-                  <div className="flex items-center gap-2 text-black/40 mb-1">
-                      <ExternalLink size={12} className="rotate-90" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider">Status</span>
+              <div className="bg-black/[0.04] rounded-xl px-3 py-2 group hover:bg-black/[0.07] transition-colors">
+                  <div className="flex items-center gap-1.5 text-black/40 mb-0.5">
+                      <ExternalLink size={11} className="rotate-90" />
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Status</span>
                   </div>
                   <select 
-                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none cursor-pointer appearance-none"
+                     className="w-full bg-transparent border-none p-0 text-[13px] leading-tight font-semibold text-black focus:outline-none cursor-pointer appearance-none"
                      value={formData.callStatus}
                      onChange={(e) => updateField('callStatus', e.target.value)}
                    >
@@ -297,14 +341,13 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                    </select>
               </div>
 
-               {/* Card 6: Assignee */}
-               <div className="bg-black/5 rounded-2xl p-4 space-y-2 group hover:bg-black/10 transition-colors">
-                   <div className="flex items-center gap-2 text-black/40 mb-1">
-                       <Activity size={12} />
-                       <span className="text-[9px] font-bold uppercase tracking-wider">Assignee</span>
+               <div className="bg-black/[0.04] rounded-xl px-3 py-2 group hover:bg-black/[0.07] transition-colors">
+                   <div className="flex items-center gap-1.5 text-black/40 mb-0.5">
+                       <Activity size={11} />
+                       <span className="text-[8px] font-bold uppercase tracking-wider">Assignee</span>
                    </div>
                    <input 
-                     className="w-full bg-transparent border-none p-0 text-sm font-semibold text-black focus:outline-none placeholder:text-black/20"
+                     className="w-full bg-transparent border-none p-0 text-[13px] leading-tight font-semibold text-black focus:outline-none placeholder:text-black/25"
                      placeholder="Select Telecaller..."
                      value={formData.telecaller}
                      onChange={(e) => updateField('telecaller', e.target.value)}
@@ -312,35 +355,41 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                </div>
 
            </div>
-           
-           {/* Integrated Intelligence Box */}
-           <div className="mt-auto flex-1 flex flex-col min-h-[200px] mb-4 lg:mb-0">
-               <div className="flex justify-between items-center mb-2 px-1">
+           </div>
+
+           <div className="flex flex-col flex-1 min-h-0 pt-3 mt-2 border-t border-black/[0.06]">
+               <div className="flex justify-between items-center gap-2 mb-2 shrink-0">
                    <span className="text-[9px] uppercase tracking-[0.3em] text-black/40 font-bold">Internal Intelligence</span>
-                   {formData.reminderRemark && <span className="text-[9px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Sync: {formData.reminderRemark}</span>}
+                   {formData.reminderRemark && (
+                     <span className="text-[8px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100 truncate max-w-[50%]">
+                       Sync: {formData.reminderRemark}
+                     </span>
+                   )}
                </div>
                
-               <div className="relative group flex-1 min-h-[150px]">
+               <div className="flex flex-col flex-1 min-h-[120px] lg:min-h-0 rounded-xl overflow-hidden bg-white/80 shadow-md border border-black/[0.04] focus-within:bg-white focus-within:ring-1 focus-within:ring-black/10">
                   <textarea 
-                     className="w-full h-full bg-white/50 shadow-xl focus:border-black/10 focus:bg-white rounded-2xl p-4 md:p-5 text-sm font-medium text-black placeholder:text-black/20 focus:outline-none transition-all resize-none leading-relaxed custom-scrollbar-black pb-14"
-                     placeholder="Enter detailed strategic remarks and intelligence..."
+                     className="flex-1 min-h-0 w-full p-3 text-sm font-medium text-black placeholder:text-black/25 focus:outline-none resize-none leading-relaxed custom-scrollbar-black overflow-y-auto bg-transparent"
+                     placeholder="Strategic remarks and intelligence..."
                      value={formData.remarks}
                      onChange={(e) => updateField('remarks', e.target.value)}
                   />
                   
-                  <button 
-                    onClick={handleManualSave}
-                    disabled={saveStatus === 'saving'}
-                    className="absolute bottom-3 right-3 md:bottom-4 md:right-4 px-4 md:px-5 py-2 bg-black text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-black/80 active:scale-95 transition-all shadow-lg flex items-center gap-2"
-                  >
-                    {saveStatus === 'saving' ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <span>Save Sync</span>}
-                  </button>
+                  <div className="shrink-0 flex justify-end px-3 py-2 border-t border-black/[0.06] bg-white/95">
+                    <button 
+                      onClick={handleManualSave}
+                      disabled={saveStatus === 'saving'}
+                      className="px-4 py-1.5 bg-black text-white rounded-full text-[10px] font-bold uppercase tracking-wider hover:bg-black/85 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+                    >
+                      {saveStatus === 'saving' ? <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <span>Save</span>}
+                    </button>
+                  </div>
                </div>
            </div>
          </div>
 
         {/* --- RIGHT PANEL: ACTIVITY LOG --- */}
-         <div className="flex-none lg:flex-1 bg-white/80 rounded-2xl md:rounded-3xl relative shadow-2xl overflow-hidden text-black flex flex-col min-h-[400px] lg:min-h-0 mb-4 lg:mb-0">
+         <div className="flex-none lg:flex-1 lg:h-full bg-white/80 rounded-2xl md:rounded-3xl relative shadow-2xl overflow-hidden text-black flex flex-col min-h-[320px] lg:min-h-0">
             <div className="absolute top-0 left-0 right-0 p-5 pb-3 flex justify-between items-center z-20 backdrop-blur-sm bg-gradient-to-b from-white to-transparent">
                <span className="text-[10px] uppercase tracking-[0.3em] text-black/40 font-bold">Activity Feed</span>
                 <span className="text-[10px] font-bold text-black/30">{formData.history.length}</span>
@@ -368,7 +417,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                 )}
            </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 flex flex-col gap-3 backdrop-blur-md bg-white/90 border-t border-black/5">
+            <div className="absolute bottom-0 left-0 right-0 p-3 md:p-4 flex flex-col gap-2 backdrop-blur-md bg-white/90 border-t border-black/5">
              <div className="mb-2 flex items-center justify-between transition-colors">
                 <div className="flex items-center gap-2">
                    <Calendar size={12} className="text-black transition-colors" />
@@ -386,7 +435,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
              <div className="relative shadow-2xl shadow-black/25 rounded-xl bg-white border border-black/5">
                 <textarea 
                   placeholder="Log activity..." 
-                  className="w-full bg-transparent border-none rounded-xl p-3 text-xs font-medium focus:outline-none focus:ring-0 text-black placeholder:text-black/30 transition-all resize-none h-16 md:h-20"
+                  className="w-full bg-transparent border-none rounded-lg p-2 text-xs font-medium focus:outline-none focus:ring-0 text-black placeholder:text-black/30 resize-none h-14"
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
                   onKeyDown={(e) => {
@@ -400,7 +449,7 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
              <button 
                onClick={addHistoryNote}
                disabled={!newNote.trim()}
-               className="w-full bg-black text-white py-3 rounded-xl text-[9px] font-bold uppercase tracking-[0.2em] hover:opacity-90 active:scale-95 transition-all disabled:cursor-not-allowed disabled:text-white/50 shadow-2xl shadow-black/25 transform hover:-translate-y-0.5"
+               className="w-full bg-black text-white py-2 rounded-lg text-[9px] font-bold uppercase tracking-[0.15em] hover:opacity-90 active:scale-95 transition-all disabled:cursor-not-allowed disabled:text-white/50"
              >
                ADD TODAY'S ACTIVITY
              </button>
