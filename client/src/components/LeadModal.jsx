@@ -423,13 +423,34 @@ const LeadModal = ({ lead, onClose, onUpdate, isSaving, cardColor: initialColor 
                    <Calendar size={12} className="text-black transition-colors" />
                    <span className="text-[10px] font-bold uppercase tracking-wider text-black transition-colors">Next Reminder</span>
                 </div>
-                <input 
-                  type="date" 
-                  className="bg-black text-white rounded-lg px-3 md:px-4 py-2 text-[10px] font-bold uppercase focus:outline-none cursor-pointer shadow-lg border-none hover:scale-105 transition-transform"
-                  style={{ colorScheme: 'dark' }}
-                  value={formData.reminderDate}
-                  onChange={(e) => updateField('reminderDate', e.target.value)}
-                />
+                <div className="flex items-center gap-2">
+                  {(formData.reminderDate || formData.reminderRemark) && (
+                    <button
+                      type="button"
+                      title="Remove reminder"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+                        setFormData(prev => ({ ...prev, reminderDate: '', reminderRemark: '' }));
+                        setSaveStatus('saving');
+                        onUpdate({ reminderDate: '', reminderRemark: '' })
+                          .then(() => { setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 2000); })
+                          .catch(() => setSaveStatus('idle'));
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-500 text-[9px] font-bold uppercase tracking-wider hover:bg-red-100 hover:border-red-300 active:scale-95 transition-all"
+                    >
+                      <X size={10} strokeWidth={2.5} />
+                      Strip
+                    </button>
+                  )}
+                  <input 
+                    type="date" 
+                    className="bg-black text-white rounded-lg px-3 md:px-4 py-2 text-[10px] font-bold uppercase focus:outline-none cursor-pointer shadow-lg border-none hover:scale-105 transition-transform"
+                    style={{ colorScheme: 'dark' }}
+                    value={formData.reminderDate}
+                    onChange={(e) => updateField('reminderDate', e.target.value)}
+                  />
+                </div>
              </div>
 
              <div className="relative shadow-2xl shadow-black/25 rounded-xl bg-white border border-black/5">
